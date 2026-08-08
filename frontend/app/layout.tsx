@@ -1,4 +1,5 @@
 import './globals.css'
+import './forge-app.css'
 import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import ClerkTokenBridge from '../components/ClerkTokenBridge'
