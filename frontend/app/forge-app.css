@@ -10,19 +10,31 @@
   --brand-soft: #e4e9ef;
   --ink-soft: #e4e9ef;
 }
+[data-theme='dark'] {
+  --bg: #101923;
+  --surface: #17222d;
+  --surface-muted: #1d2a36;
+  --border: #3a4a58;
+  --text: #eef1f5;
+  --muted: #aab5c0;
+  --brand: #e4572e;
+  --brand-soft: #2b3946;
+  --ink-soft: #2b3946;
+}
 
 html, body { background: var(--bg); color: var(--text); }
 body {
   background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px);
   font-family: 'IBM Plex Sans', Arial, sans-serif;
 }
+[data-theme='dark'] body { background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px); }
 button, input, textarea, select { border-radius: 0 !important; }
 a { color: inherit; }
 
 .shell { grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: 68px minmax(0, 1fr); background: transparent; }
 .topbar { height: 68px; padding: 0 28px; gap: 26px; background: rgba(238,241,245,.94); border-bottom: 1px solid var(--border); }
 .brand { min-width: 190px; color: var(--text); font: 500 15px 'IBM Plex Sans', sans-serif; text-decoration: none; }
-.brand-mark { width: 28px; height: 28px; border-radius: 0; background: var(--text) !important; color: #fff; font: 500 15px 'IBM Plex Mono', monospace; overflow: visible; }
+.brand-mark { width: 28px; height: 28px; border-radius: 0; background: var(--text) url('/logo.jpg') center/cover no-repeat !important; color: transparent; font: 500 15px 'IBM Plex Mono', monospace; overflow: visible; }
 .brand-mark::after { content: 'F'; }
 .brand-mark { font-size: 0; }
 .search { height: 38px; max-width: 620px; border-radius: 0; border: 1px solid var(--border); background: var(--surface-muted); color: var(--muted); font: 13px 'IBM Plex Mono', monospace; }
@@ -110,6 +122,11 @@ a { color: inherit; }
 .org-node { border-radius: 0; }
 .org-node.root { border-color: var(--brand); }
 .auth-page { place-items: center; background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px); }
+.auth-card .brand-mark { background: var(--text) url('/logo.jpg') center/cover no-repeat !important; }
+[data-theme='dark'] .topbar, [data-theme='dark'] .sidebar, [data-theme='dark'] .chat-list, [data-theme='dark'] .chat-main { background: rgba(23,34,45,.94); }
+[data-theme='dark'] .auth-page { background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px); }
+[data-theme='dark'] .auth-card, [data-theme='dark'] .field input, [data-theme='dark'] .field textarea, [data-theme='dark'] .field select { background: var(--surface); color: var(--text); }
+[data-theme='dark'] .forge-landing { background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px); }
 .auth-card { border-radius: 0; border-color: var(--border); box-shadow: 0 12px 28px rgba(16,27,40,.08); }
 .auth-card .brand { color: var(--text); }
 .auth-divider:before, .auth-divider:after { background: var(--border); }

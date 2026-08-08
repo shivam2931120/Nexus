@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useAuth } from '@clerk/nextjs'
+import AppShell from '../components/AppShell'
 import './forge.css'
 
 const stages = [
@@ -20,13 +22,20 @@ const logs = [
   ['09:43:06', 'sign', 'signature-8f2c1ad.sig', 'DONE'],
 ]
 
+function WorkspaceHome() {
+  return <AppShell><div className="page"><div className="page-heading"><div><div className="eyebrow">WORKSPACE / HOME</div><h1>Forge workspace</h1><p className="muted">A controlled workbench for deployments, documents, meetings, and team operations.</p></div><div className="actions"><Link className="button primary" href="/tasks?new=1">New task</Link><Link className="button" href="/documents?new=1">New document</Link><Link className="button" href="/meetings/room?room=nexus-team-room">Start meeting</Link></div></div><div className="grid dashboard-grid"><section className="card"><div className="card-header"><h2>Active pipeline</h2><span className="badge">CANARY / RUNNING</span></div><div className="task-row"><span className="status-dot progress" /><div className="task-copy"><strong>deploy/api-gateway · main@8f2c1ad</strong><small>4 signed artifacts · started 09:41 UTC</small></div><Link className="button" href="/analytics">Inspect</Link></div></section><section className="card"><div className="card-header"><h2>Quick start</h2></div><div className="empty"><p>Create work, write a document, or open a meeting room.</p><div className="actions"><Link className="button" href="/tasks">Tasks</Link><Link className="button" href="/documents">Documents</Link><Link className="button" href="/calendar">Calendar</Link></div></div></section></div></div></AppShell>
+}
+
 export default function Home() {
+  const { isLoaded, isSignedIn } = useAuth()
   const [copied, setCopied] = useState(false)
   const copyCommand = async () => {
     await navigator.clipboard?.writeText('npx forge init')
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
   }
+
+  if (isLoaded && isSignedIn) return <WorkspaceHome />
 
   return <main className="forge-landing">
     <nav className="forge-nav">

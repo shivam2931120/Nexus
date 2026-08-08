@@ -1,15 +1,18 @@
 'use client'
 
+import { useAuth } from '@clerk/nextjs'
 import { useSignIn, useSignUp } from '@clerk/nextjs/legacy'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { isLoaded: authLoaded, isSignedIn } = useAuth()
   const { isLoaded: signInLoaded, signIn, setActive: setSignInActive } = useSignIn()
   const { isLoaded: signUpLoaded, signUp, setActive: setSignUpActive } = useSignUp()
   const [mode, setMode] = useState<'signIn'|'signUp'>('signIn')
   useEffect(() => { if (new URLSearchParams(window.location.search).get('signup') === 'true') setMode('signUp') }, [])
+  useEffect(() => { if (authLoaded && isSignedIn) router.replace('/') }, [authLoaded, isSignedIn, router])
   const [verification, setVerification] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')

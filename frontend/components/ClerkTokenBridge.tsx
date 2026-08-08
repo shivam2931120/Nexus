@@ -14,10 +14,13 @@ export default function ClerkTokenBridge() {
       localStorage.removeItem('nexus_name')
       return
     }
-    void getToken().then((token) => {
+    const sync = () => void getToken().then((token) => {
       if (token) localStorage.setItem('nexus_token', token)
       if (user) localStorage.setItem('nexus_name', user.fullName ?? user.firstName ?? 'Nexus user')
     })
+    sync()
+    const timer = window.setInterval(sync, 45000)
+    return () => window.clearInterval(timer)
   }, [getToken, isLoaded, isSignedIn, user])
 
   return null
