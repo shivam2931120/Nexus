@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: nexus-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nexus}
+    username: ${DATABASE_USERNAME:nexus}
+    password: ${DATABASE_PASSWORD:nexus}
+    hikari:
+      data-source-properties:
+        prepareThreshold: ${PG_PREPARE_THRESHOLD:0}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: public
+  flyway:
+    enabled: true
+    schemas: public,nexus_auth,org,chat,project,document
+    create-schemas: true
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+nexus:
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-local-development-to-a-long-secret-key}
+    issuer: ${JWT_ISSUER:nexus-local}
+    access-minutes: 15
+    refresh-days: 7
+server:
+  port: ${PORT:${SERVER_PORT:8080}}

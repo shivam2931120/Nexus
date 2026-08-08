@@ -1,0 +1,15 @@
+package com.nexus.org;
+
+import jakarta.validation.Valid; import jakarta.validation.constraints.NotBlank; import org.springframework.jdbc.core.JdbcTemplate; import org.springframework.web.bind.annotation.*; import java.util.*;
+
+@RestController @RequestMapping("/api")
+public class OrganizationController {
+    private final JdbcTemplate db; public OrganizationController(JdbcTemplate db){this.db=db;}
+    record CreateOrg(@NotBlank String name){} record CreateTeam(@NotBlank String name,String description){}
+    @PostMapping("/orgs") public Map<String,Object> createOrg(@Valid @RequestBody CreateOrg req,org.springframework.security.core.Authentication a){UUID uid=UUID.fromString(a.getName()),id=UUID.randomUUID();String slug=req.name().toLowerCase().replaceAll("[^a-z0-9]+","-")+"-"+id.toString().substring(0,6);db.update("INSERT INTO org.organizations(id,name,slug) VALUES (?,?,?)",id,req.name(),slug);db.update("INSERT INTO org.memberships(id,organization_id,user_id,role) VALUES (?,?,?,?)",UUID.randomUUID(),id,uid,"OWNER");return Map.of("id",id,"name",req.name(),"slug",slug,"role","OWNER");}
+    @GetMapping("/orgs") public List<Map<String,Object>> list(org.springframework.security.core.Authentication a){return db.queryForList("SELECT o.id,o.name,o.slug,m.role FROM org.organizations o JOIN org.memberships m ON m.organization_id=o.id WHERE m.user_id=? AND o.deleted_at IS NULL ORDER BY o.name",UUID.fromString(a.getName()));}
+    @GetMapping("/orgs/{orgId}/teams") public List<Map<String,Object>> teams(@PathVariable UUID orgId,org.springframework.security.core.Authentication a){requireMember(orgId,UUID.fromString(a.getName()));return db.queryForList("SELECT id,name,description FROM org.teams WHERE organization_id=? AND deleted_at IS NULL ORDER BY name",orgId);}
+    @PostMapping("/orgs/{orgId}/teams") public Map<String,Object> createTeam(@PathVariable UUID orgId,@Valid @RequestBody CreateTeam req,org.springframework.security.core.Authentication a){UUID uid=UUID.fromString(a.getName());requireAdmin(orgId,uid);UUID id=UUID.randomUUID();db.update("INSERT INTO org.teams(id,organization_id,name,description) VALUES (?,?,?,?)",id,orgId,req.name(),req.description());db.update("INSERT INTO org.team_members(team_id,user_id) VALUES (?,?)",id,uid);db.update("INSERT INTO chat.channels(id,organization_id,team_id,name,type) VALUES (?,?,?,?,?)",UUID.randomUUID(),orgId,id,"general","PUBLIC");return Map.of("id",id,"name",req.name(),"description",Objects.toString(req.description(),""));}
+    public void requireMember(UUID org,UUID user){if(db.queryForObject("SELECT count(*) FROM org.memberships WHERE organization_id=? AND user_id=?",Integer.class,org,user)==0)throw new SecurityException("You are not a member of this organization.");}
+    private void requireAdmin(UUID org,UUID user){requireMember(org,user);String role=db.queryForObject("SELECT role FROM org.memberships WHERE organization_id=? AND user_id=?",String.class,org,user);if(!role.equals("OWNER")&&!role.equals("ADMIN"))throw new SecurityException("Administrator access is required.");}
+}
