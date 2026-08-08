@@ -27,6 +27,9 @@ services:
       REDIS_URL: redis://redis:6379
       CLERK_JWT_ISSUER: ${CLERK_JWT_ISSUER:-https://uncommon-tadpole-96.clerk.accounts.dev}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-local-development-to-a-long-secret-key}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports: ["8080:8080"]
     depends_on:
       postgres: {condition: service_healthy}
