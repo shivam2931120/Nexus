@@ -5,7 +5,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /actuator/health
+    healthCheckPath: /actuator/health/liveness
     envVars:
       - key: DATABASE_URL
         sync: false
