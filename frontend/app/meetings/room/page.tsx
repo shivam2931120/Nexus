@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { Room, RoomEvent, Track, type RemoteTrack, type LocalTrack } from 'livekit-client'
 import { api } from '../../../lib/api'
 import { Copy, Mic, PhoneOff, Video, VideoOff } from '../../../components/icons'
@@ -21,6 +22,7 @@ function TrackView({ item }: { item: AttachedTrack }) {
 
 export default function MeetingRoomPage() {
   const router = useRouter()
+  const { getToken } = useAuth()
   const [roomName, setRoomName] = useState('nexus-team-room')
   const [meetingId, setMeetingId] = useState('')
   const liveRoom = useRef<Room | null>(null)
@@ -53,8 +55,10 @@ export default function MeetingRoomPage() {
     room.on(RoomEvent.Disconnected, () => { if (!cancelled) setStatus('Disconnected') })
     ;(async () => {
       try {
-        if (meetingId) await api(`/meetings/${meetingId}/join`, { method: 'POST' })
-        const data = await api<MeetingToken>(`/meetings/token?room=${encodeURIComponent(roomName)}`)
+        const token = await getToken()
+        if (!token) throw new Error('Your sign-in session has expired. Please sign in again.')
+        if (meetingId) await api(`/meetings/${meetingId}/join`, { method: 'POST', token })
+        const data = await api<MeetingToken>(`/meetings/token?room=${encodeURIComponent(roomName)}`, { token })
         if (cancelled) return
         await room.connect(data.serverUrl, data.token)
         await room.localParticipant.enableCameraAndMicrophone()
@@ -65,7 +69,7 @@ export default function MeetingRoomPage() {
       }
     })()
     return () => { cancelled = true; room.disconnect(); liveRoom.current = null }
-  }, [meetingId, roomName])
+  }, [getToken, meetingId, roomName])
 
   const toggleMic = async () => { const next = !mic; setMic(next); await liveRoom.current?.localParticipant.setMicrophoneEnabled(next) }
   const toggleCamera = async () => { const next = !camera; setCamera(next); await liveRoom.current?.localParticipant.setCameraEnabled(next) }
