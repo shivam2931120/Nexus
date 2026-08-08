@@ -1,5 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS calendar;
-CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS nexus_storage;
 CREATE SCHEMA IF NOT EXISTS notification;
 CREATE SCHEMA IF NOT EXISTS audit;
 
@@ -18,7 +18,7 @@ CREATE TABLE calendar.events (
   deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE storage.files (
+CREATE TABLE nexus_storage.files (
   id UUID PRIMARY KEY,
   organization_id UUID NOT NULL REFERENCES org.organizations(id),
   team_id UUID REFERENCES org.teams(id),
@@ -66,7 +66,7 @@ CREATE TABLE audit.events (
 );
 
 CREATE INDEX idx_calendar_events_org_start ON calendar.events(organization_id, starts_at);
-CREATE INDEX idx_storage_files_org_created ON storage.files(organization_id, created_at DESC);
+CREATE INDEX idx_storage_files_org_created ON nexus_storage.files(organization_id, created_at DESC);
 CREATE INDEX idx_invitations_org_status ON org.invitations(organization_id, status);
 CREATE INDEX idx_notifications_user_created ON notification.notifications(user_id, created_at DESC);
 CREATE INDEX idx_audit_org_created ON audit.events(organization_id, created_at DESC);

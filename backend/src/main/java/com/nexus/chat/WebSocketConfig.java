@@ -1,14 +1,14 @@
 package com.nexus.chat;
 
-import com.nexus.auth.JwtService; import org.springframework.context.annotation.Configuration; import org.springframework.messaging.simp.config.ChannelRegistration; import org.springframework.messaging.simp.config.MessageBrokerRegistry; import org.springframework.web.socket.config.annotation.*;
+import com.nexus.auth.JwtService; import org.springframework.beans.factory.annotation.Value; import org.springframework.context.annotation.Configuration; import org.springframework.messaging.simp.config.ChannelRegistration; import org.springframework.messaging.simp.config.MessageBrokerRegistry; import org.springframework.web.socket.config.annotation.*;
 
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
- private final JwtService jwt; public WebSocketConfig(JwtService jwt){this.jwt=jwt;}
+ private final JwtService jwt; private final String frontendOrigin; public WebSocketConfig(JwtService jwt,@Value("${FRONTEND_ORIGIN:http://localhost:3000}") String frontendOrigin){this.jwt=jwt;this.frontendOrigin=frontendOrigin;}
  public void configureMessageBroker(MessageBrokerRegistry r){r.enableSimpleBroker("/topic","/queue");r.setApplicationDestinationPrefixes("/app");r.setUserDestinationPrefix("/user");}
  public void configureClientInboundChannel(ChannelRegistration r){r.interceptors(new JwtStompInterceptor(jwt));}
- public void registerStompEndpoints(StompEndpointRegistry r){r.addEndpoint("/ws").setAllowedOriginPatterns("http://localhost:3000","http://127.0.0.1:3000");}
+ public void registerStompEndpoints(StompEndpointRegistry r){r.addEndpoint("/ws").setAllowedOriginPatterns("http://localhost:3000","http://127.0.0.1:3000",frontendOrigin,"https://*.vercel.app");}
 }
 
 final class JwtStompInterceptor implements org.springframework.messaging.support.ChannelInterceptor {

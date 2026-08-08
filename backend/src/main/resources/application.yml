@@ -17,13 +17,21 @@ spring:
         default_schema: public
   flyway:
     enabled: true
-    schemas: public,nexus_auth,org,chat,project,document
+    schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration
     create-schemas: true
   data:
     redis:
       url: ${REDIS_URL:redis://localhost:6379}
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 management:
   endpoints:
     web:

@@ -5,3 +5,8 @@ export async function api<T>(path:string, options:ApiOptions={}):Promise<T>{
   const token = options.token ?? (typeof window !== 'undefined' ? localStorage.getItem('nexus_token') : null); if(token) headers.set('Authorization',`Bearer ${token}`)
   const res = await fetch(`${API}${path}`,{...options,headers}); if(!res.ok){const body=await res.json().catch(()=>({})); throw new Error(body.message ?? 'Something went wrong.')} return res.status===204?undefined as T:res.json()
 }
+export async function uploadFile<T>(path:string,file:File,fields:Record<string,string>={}):Promise<T>{
+  const form=new FormData();form.append('file',file);Object.entries(fields).forEach(([key,value])=>form.append(key,value));
+  const token=typeof window!=='undefined'?localStorage.getItem('nexus_token'):null;const headers=new Headers();if(token)headers.set('Authorization',`Bearer ${token}`);
+  const res=await fetch(`${API}${path}`,{method:'POST',headers,body:form});if(!res.ok){const body=await res.json().catch(()=>({}));throw new Error(body.message??'Upload failed.')}return res.json()
+}

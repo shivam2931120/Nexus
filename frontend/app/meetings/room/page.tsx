@@ -22,6 +22,7 @@ function TrackView({ item }: { item: AttachedTrack }) {
 export default function MeetingRoomPage() {
   const router = useRouter()
   const [roomName, setRoomName] = useState('nexus-team-room')
+  const [meetingId, setMeetingId] = useState('')
   const liveRoom = useRef<Room | null>(null)
   const [tracks, setTracks] = useState<AttachedTrack[]>([])
   const [mic, setMic] = useState(true)
@@ -30,7 +31,9 @@ export default function MeetingRoomPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    setRoomName(new URLSearchParams(window.location.search).get('room') || 'nexus-team-room')
+    const params = new URLSearchParams(window.location.search)
+    setRoomName(params.get('room') || 'nexus-team-room')
+    setMeetingId(params.get('meetingId') || '')
   }, [])
 
   const leave = useCallback(() => {
@@ -50,6 +53,7 @@ export default function MeetingRoomPage() {
     room.on(RoomEvent.Disconnected, () => { if (!cancelled) setStatus('Disconnected') })
     ;(async () => {
       try {
+        if (meetingId) await api(`/meetings/${meetingId}/join`, { method: 'POST' })
         const data = await api<MeetingToken>(`/meetings/token?room=${encodeURIComponent(roomName)}`)
         if (cancelled) return
         await room.connect(data.serverUrl, data.token)
@@ -61,7 +65,7 @@ export default function MeetingRoomPage() {
       }
     })()
     return () => { cancelled = true; room.disconnect(); liveRoom.current = null }
-  }, [roomName])
+  }, [meetingId, roomName])
 
   const toggleMic = async () => { const next = !mic; setMic(next); await liveRoom.current?.localParticipant.setMicrophoneEnabled(next) }
   const toggleCamera = async () => { const next = !camera; setCamera(next); await liveRoom.current?.localParticipant.setCameraEnabled(next) }

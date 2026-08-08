@@ -17,7 +17,8 @@ export function useWorkspace() {
     try {
       const token = await getToken()
       if (!token) throw new Error('Your session has expired. Please sign in again.')
-      const result = await api<Workspace>('/bootstrap', { token })
+      const selectedOrg = localStorage.getItem('nexus_org_id')
+      const result = await api<Workspace>(selectedOrg ? `/bootstrap?orgId=${encodeURIComponent(selectedOrg)}` : '/bootstrap', { token })
       setWorkspace(result)
       localStorage.setItem('nexus_org_id', result.organization.id)
       localStorage.setItem('nexus_team_id', result.team.id)

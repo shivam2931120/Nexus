@@ -35,6 +35,8 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false
+      - key: FRONTEND_ORIGIN
+        value: https://nexus-nine-drab-77.vercel.app
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
