@@ -9,7 +9,7 @@ import java.io.IOException; import java.util.List;
 public class SecurityConfig {
     @Bean PasswordEncoder passwordEncoder(){return new BCryptPasswordEncoder();}
     @Bean UserDetailsService unusedBasicAuthFallback(){return username -> {throw new UsernameNotFoundException(username);};}
-    @Bean SecurityFilterChain security(HttpSecurity http,JwtFilter filter,ClerkJwtFilter clerkFilter)throws Exception{return http.csrf(c->c.disable()).cors(c->{}).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests(a->a.requestMatchers("/api/auth/**","/actuator/health","/v3/api-docs/**","/swagger-ui/**").permitAll().anyRequest().authenticated()).addFilterBefore(clerkFilter, UsernamePasswordAuthenticationFilter.class).addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class).build();}
+    @Bean SecurityFilterChain security(HttpSecurity http,JwtFilter filter,ClerkJwtFilter clerkFilter)throws Exception{return http.csrf(c->c.disable()).cors(c->{}).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests(a->a.requestMatchers("/api/auth/**","/actuator/health/**","/v3/api-docs/**","/swagger-ui/**").permitAll().anyRequest().authenticated()).addFilterBefore(clerkFilter, UsernamePasswordAuthenticationFilter.class).addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class).build();}
 }
 
 @Component class JwtFilter extends OncePerRequestFilter {
