@@ -3,7 +3,7 @@ services:
     name: nexus-backend
     runtime: docker
     plan: free
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /actuator/health
     envVars:
