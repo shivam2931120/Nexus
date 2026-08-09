@@ -159,6 +159,10 @@ a { color: inherit; }
 .auth-page { place-items: center; background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px); }
 .auth-card .brand-mark { background: var(--text) url('/logo.jpg') center/cover no-repeat !important; }
 [data-theme='dark'] .topbar, [data-theme='dark'] .sidebar, [data-theme='dark'] .chat-list, [data-theme='dark'] .chat-main { background: rgba(23,34,45,.94); }
+[data-theme='dark'] .nav-item.active { background: var(--brand); color: #fff; }
+[data-theme='dark'] .nav-item.active svg { color: #fff; }
+[data-theme='dark'] .avatar { background: var(--brand); color: #fff; }
+[data-theme='dark'] .nav-item.active small, [data-theme='dark'] .nav-item.active .muted { color: #fff; }
 [data-theme='dark'] .auth-page { background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px); }
 [data-theme='dark'] .auth-card, [data-theme='dark'] .field input, [data-theme='dark'] .field textarea, [data-theme='dark'] .field select { background: var(--surface); color: var(--text); }
 [data-theme='dark'] .forge-landing { background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(58,74,88,.35) 24px); }

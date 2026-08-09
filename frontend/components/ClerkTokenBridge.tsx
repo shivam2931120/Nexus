@@ -2,6 +2,7 @@
 
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useEffect } from 'react'
+import { api } from '../lib/api'
 
 export default function ClerkTokenBridge() {
   const { isLoaded, isSignedIn, getToken } = useAuth()
@@ -16,7 +17,11 @@ export default function ClerkTokenBridge() {
     }
     const sync = () => void getToken().then((token) => {
       if (token) localStorage.setItem('nexus_token', token)
-      if (user) localStorage.setItem('nexus_name', user.fullName ?? user.firstName ?? 'Nexus user')
+      const displayName = user?.fullName ?? user?.firstName ?? 'Nexus user'
+      if (user) {
+        localStorage.setItem('nexus_name', displayName)
+        if (token && displayName !== 'Nexus user') void api('/me/profile', { method: 'PUT', body: JSON.stringify({ name: displayName }), token })
+      }
     })
     sync()
     const timer = window.setInterval(sync, 45000)
