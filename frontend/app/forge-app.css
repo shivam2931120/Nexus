@@ -111,6 +111,41 @@ a { color: inherit; }
 .file-card, .person-card, .metric-card, .plan-card, .integration-card { border-radius: 0; border-color: var(--border); box-shadow: none; }
 .file-card:hover { border-color: var(--brand); }
 .file-icon, .integration-icon, .notification-icon { border-radius: 0; color: var(--muted); background: var(--ink-soft); }
+.forge-files-heading { align-items: flex-end; }
+.forge-file-metrics { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.forge-file-metrics > div { display: grid; gap: 8px; padding: 18px 20px; border-right: 1px solid var(--border); }
+.forge-file-metrics > div:last-child { border-right: 0; }
+.forge-file-metrics strong { font: 700 30px/1 'Archivo', Arial, sans-serif; letter-spacing: -1px; }
+.forge-file-metrics span { color: var(--muted); font: 10px 'IBM Plex Mono', monospace; letter-spacing: .14em; }
+.forge-file-surface { position: relative; min-height: 405px; padding: 24px; }
+.forge-file-surface.is-dragging { border-color: var(--brand); }
+.forge-file-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.forge-file-search { max-width: 360px; background: var(--surface); }
+.forge-file-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 12px 'IBM Plex Mono', monospace; }
+.forge-file-toolbar select { height: 34px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); padding: 0 9px; font: 11px 'IBM Plex Mono', monospace; }
+.forge-file-toolbar .icon-button.selected { color: var(--brand); background: var(--ink-soft); }
+.forge-file-filters { display: flex; gap: 0; flex-wrap: wrap; padding: 17px 0 20px; }
+.forge-file-filters button { border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--muted); padding: 0 14px; font: 11px 'IBM Plex Mono', monospace; cursor: pointer; }
+.forge-file-filters button:first-child { padding-left: 0; }
+.forge-file-filters button:last-child { border-right: 0; }
+.forge-file-filters button.active { color: var(--text); font-weight: 500; }
+.forge-file-filters span { color: var(--muted); margin-left: 7px; }
+.forge-file-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.forge-file-card { min-height: 170px; cursor: pointer; }
+.forge-file-card.selected, .forge-file-row.selected { border-color: var(--brand); }
+.forge-file-empty { min-height: 245px; display: grid; place-items: center; align-content: center; gap: 9px; color: var(--muted); text-align: center; font: 12px 'IBM Plex Mono', monospace; }
+.forge-file-empty strong { color: var(--text); font-size: 13px; }
+.forge-file-empty p { margin: 0 0 9px; }
+.forge-file-list { border: 1px solid var(--border); }
+.forge-file-row { padding: 8px 12px; cursor: pointer; }
+.forge-drop-overlay { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; align-content: center; gap: 9px; background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--brand); border: 2px dashed var(--brand); font: 12px 'IBM Plex Mono', monospace; }
+.forge-file-inspector { margin-top: 14px; max-width: 100%; }
+.forge-inspector-icon { width: 62px; height: 62px; display: grid; place-items: center; margin-bottom: 13px; background: var(--ink-soft); color: var(--muted); }
+.forge-file-inspector > strong { display: block; overflow-wrap: anywhere; font: 500 14px 'IBM Plex Sans', sans-serif; }
+.forge-file-inspector dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 22px 0; }
+.forge-file-inspector dl div { display: grid; gap: 7px; min-width: 0; }
+.forge-file-inspector dt { color: var(--muted); font: 10px 'IBM Plex Mono', monospace; letter-spacing: .14em; }
+.forge-file-inspector dd { margin: 0; overflow-wrap: anywhere; font: 12px 'IBM Plex Mono', monospace; }
 .meeting-hero { border-radius: 0; background: var(--ink-soft); border-left: 3px solid var(--brand); }
 .room-link { border-radius: 0; background: var(--surface-muted); }
 .notification-row.unread { background: var(--ink-soft); }
@@ -159,4 +194,13 @@ a { color: inherit; }
   .doc-editor { display: block; border: 0; background: transparent; }
   .doc-editor > .card { border: 1px solid var(--border); margin-bottom: 12px; }
   .doc-editor > .card:first-child { display: none; }
+  .forge-files-heading { align-items: initial; }
+  .forge-file-metrics { grid-template-columns: 1fr; }
+  .forge-file-metrics > div { border-right: 0; border-bottom: 1px solid var(--border); }
+  .forge-file-metrics > div:last-child { border-bottom: 0; }
+  .forge-file-surface { padding: 16px; }
+  .forge-file-toolbar { align-items: stretch; flex-direction: column; }
+  .forge-file-search { max-width: none; }
+  .forge-file-toolbar .actions { justify-content: flex-end; }
+  .forge-file-inspector dl { grid-template-columns: 1fr; gap: 13px; }
 }
