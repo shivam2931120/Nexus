@@ -17,7 +17,7 @@ spring:
         default_schema: public
   flyway:
     enabled: true
-    schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration
+    schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration,knowledge
     create-schemas: true
   data:
     redis:
