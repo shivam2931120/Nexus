@@ -58,6 +58,14 @@ export default function FilesPage() {
     setFiles(current => current.filter(item => item.id !== file.id))
     if (selected?.id === file.id) setSelected(null)
   }
+  const openFile = async (file: FileItem) => {
+    try {
+      const result = await api<{ url: string }>(`/files/${file.id}/download`)
+      window.open(result.url, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'The file could not be opened.')
+    }
+  }
 
   const visible = useMemo(() => files.filter(file => file.name.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || typeOf(file) === filter)).sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'size' ? b.size_bytes - a.size_bytes : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [files, filter, query, sort])
   const totalBytes = files.reduce((sum, file) => sum + file.size_bytes, 0)
@@ -72,6 +80,6 @@ export default function FilesPage() {
       {visible.length === 0 ? <div className="forge-file-empty"><Upload size={30} /><strong>{files.length === 0 ? 'Drop files here to begin.' : 'No matching files.'}</strong><p>{files.length === 0 ? 'Upload documents, images, or archives to your workspace.' : 'Try another search or filter.'}</p>{files.length === 0 && <label className="button primary" htmlFor="file-upload"><Upload size={15} /> Choose files</label>}</div> : view === 'grid' ? <div className="file-grid forge-file-grid">{visible.map(file => <article className={`file-card forge-file-card ${selected?.id === file.id ? 'selected' : ''}`} key={file.id} onClick={() => setSelected(file)}><div className="file-icon"><FileText size={28} /></div><strong title={file.name}>{file.name}</strong><small className="muted">{file.mime_type} · {formatSize(file.size_bytes)}</small><button className="icon-button file-menu" onClick={event => { event.stopPropagation(); void remove(file) }} aria-label={`Delete ${file.name}`}><MoreHorizontal size={16} /></button></article>)}</div> : <div className="forge-file-list">{visible.map(file => <div className={`task-row forge-file-row ${selected?.id === file.id ? 'selected' : ''}`} key={file.id} onClick={() => setSelected(file)}><div className="file-icon small"><FileText size={18} /></div><div className="task-copy"><strong>{file.name}</strong><small>{file.mime_type} · {formatSize(file.size_bytes)} · {new Date(file.created_at).toLocaleDateString()}</small></div><button className="icon-button" onClick={event => { event.stopPropagation(); void remove(file) }} aria-label={`Delete ${file.name}`}><MoreHorizontal size={16} /></button></div>)}</div>}
       {dragging && <div className="forge-drop-overlay"><Upload size={24} /><strong>Release to upload</strong></div>}
     </div>
-    {selected && <aside className="forge-file-inspector card"><div className="card-header"><h2>Object details</h2><button className="icon-button" onClick={() => setSelected(null)} aria-label="Close details"><X size={16} /></button></div><div className="forge-inspector-icon"><FileText size={30} /></div><strong>{selected.name}</strong><dl><div><dt>TYPE</dt><dd>{selected.mime_type}</dd></div><div><dt>SIZE</dt><dd>{formatSize(selected.size_bytes)}</dd></div><div><dt>ADDED</dt><dd>{new Date(selected.created_at).toLocaleString()}</dd></div></dl><button className="button" onClick={() => void remove(selected)}>Delete object</button></aside>}
+    {selected && <aside className="forge-file-inspector card"><div className="card-header"><h2>Object details</h2><button className="icon-button" onClick={() => setSelected(null)} aria-label="Close details"><X size={16} /></button></div><div className="forge-inspector-icon"><FileText size={30} /></div><strong>{selected.name}</strong><dl><div><dt>TYPE</dt><dd>{selected.mime_type}</dd></div><div><dt>SIZE</dt><dd>{formatSize(selected.size_bytes)}</dd></div><div><dt>ADDED</dt><dd>{new Date(selected.created_at).toLocaleString()}</dd></div></dl><div className="actions"><button className="button primary" onClick={() => void openFile(selected)}>Open / download</button><button className="button" onClick={() => void remove(selected)}>Delete object</button></div></aside>}
   </div></AppShell>
 }
