@@ -192,6 +192,16 @@ a { color: inherit; }
 .meeting-controls .button.danger { background: var(--brand); border-color: var(--brand); }
 .onboarding-step span { border-radius: 0; }
 .theme-choice, .invite-row { border-radius: 0; }
+.calendar-card { overflow: auto; }
+.calendar-grid { min-width: 680px; }
+.calendar-weekdays, .calendar-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { border-bottom: 1px solid var(--border); padding: 12px 0; text-align: center; color: var(--muted); font: 11px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .08em; }
+.calendar-month { border-left: 1px solid var(--border); }
+.calendar-day { min-height: 104px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.calendar-day.today b { color: var(--brand); }
+.calendar-event { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; border: 0; padding: 5px 6px; background: var(--brand-soft); color: var(--text); font-size: 12px; cursor: pointer; }
+.calendar-week { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); min-width: 840px; border-left: 1px solid var(--border); }
+.calendar-week-column { min-height: 360px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 
 @media (max-width: 1023px) {
   .shell { grid-template-columns: 64px minmax(0,1fr); }
