@@ -64,6 +64,21 @@ public class EnterpriseController {
     @GetMapping("/orgs/{orgId}/billing")
     public Map<String,Object> billing(@PathVariable UUID orgId,org.springframework.security.core.Authentication a) { member(orgId,a); return Map.of("enabled",false,"mode","none","message","Recurring subscriptions are disabled."); }
 
+    @GetMapping("/orgs/{orgId}/analytics/summary")
+    public Map<String,Object> analytics(@PathVariable UUID orgId,org.springframework.security.core.Authentication a) {
+        member(orgId,a);
+        return Map.of(
+            "members", count("SELECT count(*) FROM org.memberships WHERE organization_id=?", orgId),
+            "messages", count("SELECT count(*) FROM chat.messages WHERE organization_id=? AND deleted_at IS NULL", orgId),
+            "tasks", count("SELECT count(*) FROM project.tasks WHERE organization_id=? AND deleted_at IS NULL", orgId),
+            "completedTasks", count("SELECT count(*) FROM project.tasks WHERE organization_id=? AND status='DONE' AND deleted_at IS NULL", orgId),
+            "documents", count("SELECT count(*) FROM document.documents WHERE organization_id=? AND deleted_at IS NULL", orgId),
+            "files", count("SELECT count(*) FROM nexus_storage.files WHERE organization_id=? AND deleted_at IS NULL", orgId),
+            "meetings", count("SELECT count(*) FROM meeting.meetings WHERE organization_id=? AND deleted_at IS NULL", orgId),
+            "events", count("SELECT count(*) FROM calendar.events WHERE organization_id=? AND deleted_at IS NULL", orgId)
+        );
+    }
+
     @PostMapping("/orgs/{orgId}/billing/checkout")
     public Map<String,Object> checkout(@PathVariable UUID orgId,org.springframework.security.core.Authentication a) { admin(orgId,a); return Map.of("provider","RAZORPAY","configured",false,"message","Razorpay subscriptions are disabled. Select a one-time payment model before enabling checkout."); }
 
@@ -71,6 +86,8 @@ public class EnterpriseController {
     public void webhook(@RequestHeader(value="X-Razorpay-Signature",required=false) String signature,@RequestBody String rawBody) { if(razorpayWebhookSecret.isBlank()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"Razorpay webhook secret is not configured."); if(signature==null||signature.isBlank()||!signature.equals(hmac(rawBody,razorpayWebhookSecret))) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED,"Invalid Razorpay webhook signature."); }
 
     private static String hmac(String body,String secret){try{Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));StringBuilder out=new StringBuilder();for(byte b:mac.doFinal(body.getBytes(StandardCharsets.UTF_8)))out.append(String.format("%02x",b));return out.toString();}catch(Exception e){throw new IllegalStateException("Webhook verification unavailable.",e);}}
+
+    private long count(String sql, UUID orgId) { return db.queryForObject(sql, Long.class, orgId); }
 
     private UUID user(org.springframework.security.core.Authentication a){return UUID.fromString(a.getName());}
     private void member(UUID org,org.springframework.security.core.Authentication a){orgs.requireMember(org,user(a));}
