@@ -158,6 +158,20 @@ a { color: inherit; }
 .org-node.root { border-color: var(--brand); }
 .auth-page { place-items: center; background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px); }
 .auth-card .brand-mark { background: var(--text) url('/logo.jpg') center/cover no-repeat !important; }
+.forge-error-page { min-height: 100vh; display: grid; place-items: center; padding: 32px; background-color: var(--bg); background-image: repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px), repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(211,218,226,.35) 24px); color: var(--text); }
+.forge-error-rule { position: absolute; top: 32px; left: 32px; right: 32px; display: flex; gap: 14px; align-items: center; color: var(--muted); font: 10px 'IBM Plex Mono', monospace; letter-spacing: .14em; }
+.forge-error-rule i { height: 1px; flex: 1; background: var(--border); }
+.forge-error-card { width: min(620px, 100%); padding: clamp(28px, 6vw, 60px); border: 1px solid var(--border); background: var(--surface); box-shadow: 0 14px 30px rgba(16,27,40,.08); }
+.forge-error-code { margin-bottom: 22px; color: var(--brand); font: 700 clamp(64px, 12vw, 124px)/.8 'Archivo', Arial, sans-serif; letter-spacing: -5px; }
+.forge-error-card h1 { margin: 14px 0; font-size: clamp(32px, 5vw, 58px); }
+.forge-error-card p { max-width: 520px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+.forge-error-reference { display: block; margin: 22px 0; color: var(--muted); font: 11px 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
+.forge-error-actions { margin-top: 26px; }
+.forge-server-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(16,27,40,.46); }
+.forge-server-dialog { width: min(500px, 100%); padding: 28px; border: 1px solid var(--brand); background: var(--surface); box-shadow: 0 18px 36px rgba(16,27,40,.2); }
+.forge-server-dialog h2 { margin: 12px 0; font: 500 20px 'IBM Plex Mono', monospace; text-transform: none; }
+.forge-server-dialog p { color: var(--muted); line-height: 1.5; }
+.forge-chat-error { margin: 14px 28px 0; }
 [data-theme='dark'] .topbar, [data-theme='dark'] .sidebar, [data-theme='dark'] .chat-list, [data-theme='dark'] .chat-main { background: rgba(23,34,45,.94); }
 [data-theme='dark'] .nav-item.active { background: var(--brand); color: #fff; }
 [data-theme='dark'] .nav-item.active svg { color: #fff; }
@@ -207,4 +221,8 @@ a { color: inherit; }
   .forge-file-search { max-width: none; }
   .forge-file-toolbar .actions { justify-content: flex-end; }
   .forge-file-inspector dl { grid-template-columns: 1fr; gap: 13px; }
+  .forge-error-page { padding: 18px; }
+  .forge-error-rule { top: 18px; left: 18px; right: 18px; }
+  .forge-error-card { padding: 28px 20px; }
+  .forge-error-actions { flex-direction: column; align-items: stretch; }
 }
