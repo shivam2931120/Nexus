@@ -11,5 +11,4 @@ public final class AuthModels {
     public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
     public record AuthResponse(String accessToken, String refreshToken, UserView user) {}
     public record UserView(UUID id, String email, String name) {}
-    public record RefreshRequest(@NotBlank String refreshToken) {}
 }

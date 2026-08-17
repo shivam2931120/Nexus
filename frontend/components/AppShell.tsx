@@ -4,11 +4,11 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useClerk } from '@clerk/nextjs'
 import { useEffect, useState } from 'react'
-import { Activity, Bell, BookOpen, CalendarDays, CircleHelp, FolderKanban, Home, Inbox, ListTodo, LogOut, MessageCircle, Search, Settings, Users, Video } from './icons'
+import { Activity, Bell, BookOpen, CalendarDays, CircleHelp, FolderKanban, Home, Inbox, ListTodo, LogOut, MessageCircle, Search, Settings, Sparkles, Users, Video } from './icons'
 import { useWorkspace } from '../lib/workspace'
 
 const primary = [['/', 'Home', Home], ['/tasks', 'My Tasks', ListTodo], ['/chat', 'Inbox', Inbox]] as const
-const workspace = [['/teams', 'Teams', Users], ['/projects', 'Projects', FolderKanban], ['/calendar', 'Calendar', CalendarDays], ['/meetings', 'Meetings', Video], ['/files', 'File Drive', FolderKanban], ['/knowledge', 'Knowledge Base', BookOpen], ['/directory', 'Directory', Users], ['/analytics', 'Analytics', Activity], ['/audit', 'Audit log', Activity]] as const
+const workspace = [['/teams', 'Teams', Users], ['/projects', 'Projects', FolderKanban], ['/calendar', 'Calendar', CalendarDays], ['/meetings', 'Meetings', Video], ['/files', 'File Drive', FolderKanban], ['/knowledge', 'Knowledge Base', BookOpen], ['/whiteboard', 'Whiteboard', FolderKanban], ['/assistant', 'AI Assistant', Sparkles], ['/directory', 'Directory', Users], ['/analytics', 'Analytics', Activity], ['/audit', 'Audit log', Activity]] as const
 type Result = { id: string; title?: string; content?: string; type: string }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

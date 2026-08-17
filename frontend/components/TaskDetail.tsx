@@ -1,0 +1,17 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
+
+type Task = { id: string; title: string; description?: string; status: string; priority: string; due_date?: string | null }
+type Comment = { id: string; content: string; user_name?: string; created_at: string }
+type Checklist = { id: string; content: string; completed: boolean }
+
+export default function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
+  const [comments, setComments] = useState<Comment[]>([]); const [checklist, setChecklist] = useState<Checklist[]>([]); const [comment, setComment] = useState(''); const [item, setItem] = useState(''); const [error, setError] = useState('')
+  useEffect(() => { void Promise.all([api<Comment[]>(`/tasks/${task.id}/comments`), api<Checklist[]>(`/tasks/${task.id}/checklist`)]).then(([notes, checks]) => { setComments(notes); setChecklist(checks) }).catch(err => setError(err instanceof Error ? err.message : 'Task details could not be loaded.')) }, [task.id])
+  const addComment = async () => { if (!comment.trim()) return; try { const result = await api<Comment>(`/tasks/${task.id}/comments`, { method: 'POST', body: JSON.stringify({ content: comment.trim() }) }); setComments(items => [...items, result]); setComment('') } catch (err) { setError(err instanceof Error ? err.message : 'Comment could not be added.') } }
+  const addItem = async () => { if (!item.trim()) return; try { const result = await api<Checklist>(`/tasks/${task.id}/checklist`, { method: 'POST', body: JSON.stringify({ content: item.trim() }) }); setChecklist(items => [...items, result]); setItem('') } catch (err) { setError(err instanceof Error ? err.message : 'Checklist item could not be added.') } }
+  const toggle = async (entry: Checklist) => { try { await api(`/tasks/checklist/${entry.id}`, { method: 'PATCH', body: JSON.stringify({ completed: !entry.completed }) }); setChecklist(items => items.map(item => item.id === entry.id ? { ...item, completed: !item.completed } : item)) } catch (err) { setError(err instanceof Error ? err.message : 'Checklist item could not be updated.') } }
+  return <div className="modal-backdrop" onClick={onClose}><div className="card modal-card task-detail" onClick={event => event.stopPropagation()}><div className="card-header"><div><div className="eyebrow">TASK DETAIL</div><h2>{task.title}</h2></div><button className="icon-button" onClick={onClose}>×</button></div>{error && <div className="form-error">{error}</div>}<p className="muted">{task.description || 'No description provided.'}</p><h3>Checklist</h3>{checklist.map(entry => <label className="task-row" key={entry.id}><input type="checkbox" checked={entry.completed} onChange={() => void toggle(entry)} /><span className="task-copy">{entry.content}</span></label>)}<div className="inline-form"><input value={item} onChange={event => setItem(event.target.value)} placeholder="Add checklist item" /><button className="button" onClick={() => void addItem()}>Add</button></div><h3>Comments</h3>{comments.map(entry => <div className="task-row" key={entry.id}><div className="task-copy"><strong>{entry.user_name || 'Workspace member'}</strong><small>{entry.content}</small></div></div>)}<div className="inline-form"><input value={comment} onChange={event => setComment(event.target.value)} placeholder="Add a comment" /><button className="button primary" onClick={() => void addComment()}>Comment</button></div></div></div>
+}

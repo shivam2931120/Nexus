@@ -35,8 +35,6 @@ public class EnterpriseController {
 
     record CreateMeeting(@NotBlank String title, String roomName, OffsetDateTime scheduledAt, Integer durationMinutes, UUID teamId) {}
     record RoleChange(@NotBlank String role) {}
-    record RazorpayWebhook(String event, Map<String,Object> payload) {}
-
     @GetMapping("/orgs/{orgId}/members")
     public List<Map<String,Object>> members(@PathVariable UUID orgId, org.springframework.security.core.Authentication a) { member(orgId,a); return db.queryForList("SELECT u.id,u.email,u.name,m.role,m.created_at FROM org.memberships m JOIN nexus_auth.users u ON u.id=m.user_id WHERE m.organization_id=? ORDER BY u.name",orgId); }
 

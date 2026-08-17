@@ -17,7 +17,7 @@ spring:
         default_schema: public
   flyway:
     enabled: true
-    schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration,knowledge
+    schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration,knowledge,whiteboard
     create-schemas: true
   data:
     redis:
@@ -46,6 +46,10 @@ nexus:
     issuer: ${JWT_ISSUER:nexus-local}
     access-minutes: 15
     refresh-days: 7
+  nemotron:
+    api-key: ${NVIDIA_API_KEY:${NEMOTRON_API_KEY:}}
+    api-url: ${NEMOTRON_API_URL:https://integrate.api.nvidia.com/v1/chat/completions}
+    model: ${NEMOTRON_MODEL:nvidia/llama-3.1-nemotron-ultra-253b-v1}
 server:
   port: ${PORT:${SERVER_PORT:8080}}
 livekit:
