@@ -11,10 +11,13 @@ Implemented:
 - BCrypt authentication, signed JWT access tokens, protected API routes, and organization membership checks
 - Organizations, teams, channels, messages, projects, tasks, documents, and document versions
 - STOMP/WebSocket endpoint foundation and persisted REST chat flow
+- Editorial-derived document collaboration with conflict-safe saves, realtime version updates, threaded comments, and version restore
 - Next.js 15 responsive shell with Nexus design tokens, dark mode, dashboard, chat, Kanban tasks, documents, projects, settings, and login/signup
 - Docker Compose, Dockerfiles, GitHub Actions, OpenAPI endpoint support, Actuator health/metrics
 
 Deferred and intentionally documented rather than faked: production email delivery, provider OAuth credentials, refresh-token persistence/rotation, R2 production adapter, LiveKit meetings, full CRDT collaboration, advanced calendar/files/analytics/AI/billing/whiteboard flows, and enterprise deployment.
+
+Editorial integration architecture and verification are documented in [`docs/EDITORIAL_INTEGRATION.md`](docs/EDITORIAL_INTEGRATION.md). Nexus does not depend on the standalone Editorial service at runtime; both applications remain independently deployable.
 
 ## Run locally
 

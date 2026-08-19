@@ -85,6 +85,10 @@ final class JwtStompInterceptor implements ChannelInterceptor {
             if (channelId != null && !canAccess(channelId, UUID.fromString(accessor.getUser().getName()))) {
                 throw new SecurityException("You do not have access to this channel.");
             }
+            UUID documentId = documentId(accessor.getDestination());
+            if (documentId != null && !canAccessDocument(documentId, UUID.fromString(accessor.getUser().getName()))) {
+                throw new SecurityException("You do not have access to this document.");
+            }
         }
         return message;
     }
@@ -112,6 +116,16 @@ final class JwtStompInterceptor implements ChannelInterceptor {
         return count != null && count > 0;
     }
 
+    private boolean canAccessDocument(UUID documentId, UUID userId) {
+        Integer count = db.queryForObject("""
+                SELECT count(*) FROM document.documents d
+                WHERE d.id=? AND d.deleted_at IS NULL
+                  AND EXISTS (SELECT 1 FROM org.memberships m WHERE m.organization_id=d.organization_id AND m.user_id=?)
+                  AND (d.team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=d.team_id AND tm.user_id=?))
+                """, Integer.class, documentId, userId, userId);
+        return count != null && count > 0;
+    }
+
     private static String displayName(Jwt token) {
         String name = token.getClaimAsString("name");
         if (name != null && !name.isBlank()) return name;
@@ -129,6 +143,18 @@ final class JwtStompInterceptor implements ChannelInterceptor {
             return UUID.fromString(destination.substring(prefix.length()));
         } catch (Exception exception) {
             throw new SecurityException("Invalid channel destination.");
+        }
+    }
+
+    private static UUID documentId(String destination) {
+        if (destination == null || !destination.startsWith("/topic/document.")) return null;
+        String value = destination.substring("/topic/document.".length());
+        int suffix = value.indexOf('.');
+        if (suffix >= 0) value = value.substring(0, suffix);
+        try {
+            return UUID.fromString(value);
+        } catch (Exception exception) {
+            throw new SecurityException("Invalid document destination.");
         }
     }
 }

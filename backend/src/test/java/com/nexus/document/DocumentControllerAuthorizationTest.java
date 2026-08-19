@@ -3,6 +3,7 @@ package com.nexus.document;
 import com.nexus.enterprise.InvitationMailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 
 import java.util.HashMap;
@@ -40,7 +41,7 @@ class DocumentControllerAuthorizationTest {
         when(db.queryForObject(startsWith("SELECT count(*) FROM org.memberships"), eq(Integer.class), eq(org), eq(user))).thenReturn(1);
         when(db.queryForObject(startsWith("SELECT role FROM org.memberships"), eq(String.class), eq(org), eq(user))).thenReturn("MEMBER");
 
-        var controller = new DocumentController(db, mail);
+        var controller = new DocumentController(db, mail, mock(SimpMessagingTemplate.class));
 
         assertThatThrownBy(() -> controller.delete(documentId, auth))
                 .isInstanceOf(SecurityException.class)

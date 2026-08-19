@@ -3,13 +3,15 @@
 import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Client, type IMessage } from '@stomp/stompjs'
 import AppShell from '../../components/AppShell'
 import { Clock, Code2, Eye, FileText, FolderOpen, Italic, Link2, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Save, Share2, Strikethrough, Table2, Trash2, Undo2, Upload, X } from '../../components/icons'
-import { api } from '../../lib/api'
+import { API, api, getAuthToken } from '../../lib/api'
 import { useWorkspace, workspaceIds } from '../../lib/workspace'
 
 type Doc = { id: string; title: string; content: string; version: number; created_by?: string; can_manage?: boolean }
 type Version = { id: string; version: number; title: string; created_at: string }
+type Comment = { id: string; parent_id?: string | null; content: string; resolved: boolean; author_name: string; author_email: string; created_at: string; deleted?: boolean }
 type NotifyResult = { recipients: number; sent: number; configured: boolean }
 type EditorMode = 'edit' | 'split' | 'preview'
 
@@ -36,12 +38,35 @@ export default function Documents() {
   const [editorMode, setEditorMode] = useState<EditorMode>('edit')
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [commentBody, setCommentBody] = useState('')
+  const [replyTo, setReplyTo] = useState<Comment | null>(null)
+  const [showComments, setShowComments] = useState(false)
+  const [online, setOnline] = useState(true)
+  const [realtime, setRealtime] = useState<'connecting' | 'connected' | 'offline'>('offline')
+  const activeRef = useRef<Doc | null>(null)
+  const savedRef = useRef(true)
 
   const documentStats = useMemo(() => {
     const content = active?.content ?? ''
     const words = content.trim() ? content.trim().split(/\s+/).length : 0
     return { words, characters: content.length, minutes: Math.max(1, Math.ceil(words / 220)) }
   }, [active?.content])
+
+  useEffect(() => { activeRef.current = active }, [active])
+  useEffect(() => { savedRef.current = saved }, [saved])
+
+  useEffect(() => {
+    const connected = () => setOnline(true)
+    const disconnected = () => setOnline(false)
+    setOnline(navigator.onLine)
+    window.addEventListener('online', connected)
+    window.addEventListener('offline', disconnected)
+    return () => {
+      window.removeEventListener('online', connected)
+      window.removeEventListener('offline', disconnected)
+    }
+  }, [])
 
   const create = useCallback(async (title = 'Untitled document', content = '') => {
     if (!orgId) return
@@ -94,6 +119,65 @@ export default function Documents() {
     setCanRedo(false)
     window.history.replaceState({}, '', `/documents?document=${document.id}`)
   }
+
+  useEffect(() => {
+    if (!active?.id) {
+      setComments([])
+      return
+    }
+    void api<Comment[]>(`/documents/${active.id}/comments`)
+      .then(setComments)
+      .catch(reason => setError(reason instanceof Error ? reason.message : 'Comments could not be loaded.'))
+  }, [active?.id])
+
+  useEffect(() => {
+    if (!active?.id || !online) {
+      setRealtime('offline')
+      return
+    }
+    let client: Client | null = null
+    let cancelled = false
+    setRealtime('connecting')
+    void getAuthToken().then(token => {
+      if (!token || cancelled) return
+      const wsUrl = `${API.replace(/^http/, 'ws').replace(/\/api\/?$/, '')}/ws`
+      client = new Client({
+        brokerURL: wsUrl,
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        reconnectDelay: 5000,
+        heartbeatIncoming: 15000,
+        heartbeatOutgoing: 15000,
+        onConnect: () => {
+          setRealtime('connected')
+          client?.subscribe(`/topic/document.${active.id}`, (frame: IMessage) => {
+            const incoming = JSON.parse(frame.body) as Doc
+            if (incoming.id !== activeRef.current?.id) return
+            if (!savedRef.current) {
+              setNotice('A teammate saved a newer version. Save is paused to protect both versions; reload this document to reconcile changes.')
+              return
+            }
+            setActive(incoming)
+            setDocs(items => items.map(item => item.id === incoming.id ? incoming : item))
+          })
+          client?.subscribe(`/topic/document.${active.id}.comments`, (frame: IMessage) => {
+            const incoming = JSON.parse(frame.body) as Comment
+            setComments(items => incoming.deleted
+              ? items.filter(item => item.id !== incoming.id && item.parent_id !== incoming.id)
+              : items.some(item => item.id === incoming.id)
+                ? items.map(item => item.id === incoming.id ? incoming : item)
+                : [...items, incoming])
+          })
+        },
+        onWebSocketClose: () => setRealtime('offline'),
+        onStompError: () => setRealtime('offline')
+      })
+      client.activate()
+    })
+    return () => {
+      cancelled = true
+      void client?.deactivate()
+    }
+  }, [active?.id, online])
 
   const setContent = (content: string, track = true) => {
     if (!active || content === active.content) return
@@ -184,7 +268,7 @@ export default function Documents() {
     setBusy(true)
     setError('')
     try {
-      const document = await api<Doc>(`/documents/${active.id}`, { method: 'PUT', body: JSON.stringify({ title: active.title, content: active.content }) })
+      const document = await api<Doc>(`/documents/${active.id}`, { method: 'PUT', body: JSON.stringify({ title: active.title, content: active.content, expectedVersion: active.version }) })
       setActive(document)
       setDocs(items => items.map(item => item.id === document.id ? document : item))
       setSaved(true)
@@ -262,6 +346,65 @@ export default function Documents() {
     }
   }
 
+  const restoreVersion = async (version: Version) => {
+    if (!active || busy) return
+    if (!window.confirm(`Restore version ${version.version}? The current document will be preserved as history.`)) return
+    setBusy(true)
+    try {
+      const document = await api<Doc>(`/documents/${active.id}/versions/${version.id}/restore`, { method: 'POST' })
+      setActive(document)
+      setDocs(items => items.map(item => item.id === document.id ? document : item))
+      setHistory([])
+      setSaved(true)
+      setNotice(`Version ${version.version} restored as version ${document.version}.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Version could not be restored.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const addComment = async () => {
+    if (!active || !commentBody.trim() || busy) return
+    setBusy(true)
+    try {
+      const input = editorInput.current
+      const comment = await api<Comment>(`/documents/${active.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: commentBody.trim(),
+          parentId: replyTo?.parent_id ?? replyTo?.id ?? null,
+          selectionStart: input?.selectionStart,
+          selectionEnd: input?.selectionEnd
+        })
+      })
+      setComments(items => items.some(item => item.id === comment.id) ? items : [...items, comment])
+      setCommentBody('')
+      setReplyTo(null)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Comment could not be added.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleComment = async (comment: Comment) => {
+    if (!active) return
+    try {
+      const updated = await api<Comment>(`/documents/${active.id}/comments/${comment.id}`, {
+        method: 'PATCH', body: JSON.stringify({ resolved: !comment.resolved })
+      })
+      setComments(items => items.map(item => item.id === updated.id ? updated : item))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Comment could not be updated.')
+    }
+  }
+
+  const orderedComments = useMemo(() => comments.filter(comment => !comment.parent_id).flatMap(comment => [
+    comment,
+    ...comments.filter(reply => reply.parent_id === comment.id)
+  ]), [comments])
+
   const exportMarkdown = () => {
     if (!active) return
     const blob = new Blob([`# ${active.title}\n\n${active.content}`], { type: 'text/markdown;charset=utf-8' })
@@ -291,8 +434,8 @@ export default function Documents() {
       <aside className="card"><div className="card-header"><h2>Documents</h2><FolderOpen size={16} /></div>{docs.length === 0 ? <div className="empty">No documents yet.</div> : docs.map(document => <button className={`nav-item ${active?.id === document.id ? 'active' : ''}`} key={document.id} onClick={() => selectDocument(document)}><FileText size={15} /><span>{document.title || 'Untitled document'}</span>{document.can_manage && <small>MANAGE</small>}</button>)}</aside>
       {active ? <section className="card editor rich-editor">
         <div className="card-header">
-          <div className="document-title-block"><input value={active.title} onChange={event => update({ ...active, title: event.target.value })} aria-label="Document title" /><div className="muted">{saved ? 'Saved to workspace' : 'Unsaved changes'} · Version {active.version}</div></div>
-          <div className="actions"><button className="button" onClick={() => void showHistory()}><Clock size={15} /> History</button><button className="button" onClick={exportMarkdown}>Markdown</button><button className="button" onClick={printDocument}>Print / PDF</button>{active.can_manage && <button className="button" onClick={() => setShareOpen(true)}><Share2 size={15} /> Notify team</button>}{active.can_manage && <button className="button" aria-label="Delete document" onClick={() => setDeleteOpen(true)}><Trash2 size={15} /> Delete</button>}<button className="button primary" disabled={busy || saved} onClick={() => void save()}><Save size={15} /> Save</button></div>
+          <div className="document-title-block"><input value={active.title} onChange={event => update({ ...active, title: event.target.value })} aria-label="Document title" /><div className="muted">{saved ? 'Saved to workspace' : 'Unsaved changes'} · Version {active.version} · {online ? realtime === 'connected' ? 'Live collaboration connected' : 'Connecting collaboration…' : 'Offline'}</div></div>
+          <div className="actions"><button className="button" onClick={() => setShowComments(value => !value)}>Comments ({comments.filter(comment => !comment.resolved).length})</button><button className="button" onClick={() => void showHistory()}><Clock size={15} /> History</button><button className="button" onClick={exportMarkdown}>Markdown</button><button className="button" onClick={printDocument}>Print / PDF</button>{active.can_manage && <button className="button" onClick={() => setShareOpen(true)}><Share2 size={15} /> Notify team</button>}{active.can_manage && <button className="button" aria-label="Delete document" onClick={() => setDeleteOpen(true)}><Trash2 size={15} /> Delete</button>}<button className="button primary" disabled={busy || saved || !online} onClick={() => void save()}><Save size={15} /> Save</button></div>
         </div>
         <div className="editor-commandbar" aria-label="Document formatting toolbar">
           <div className="editor-tool-group"><button className="editor-tool" title="Undo" aria-label="Undo" disabled={!canUndo} onClick={undo}><Undo2 size={15} /></button><button className="editor-tool" title="Redo" aria-label="Redo" disabled={!canRedo} onClick={redo}><Redo2 size={15} /></button></div>
@@ -307,9 +450,15 @@ export default function Documents() {
           {editorMode !== 'edit' && <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{active.content || '*Nothing to preview yet.*'}</ReactMarkdown></article>}
         </div>
         <div className="editor-statusbar"><span>{documentStats.words} words</span><span>{documentStats.characters} characters</span><span>{documentStats.minutes} min read</span><span className="shortcut-hint">Ctrl/⌘ + S to save</span></div>
+        {showComments && <aside className="card" aria-label="Document comments">
+          <div className="card-header"><div><h2>Editorial comments</h2><p className="muted">Threaded feedback stays inside this Nexus workspace.</p></div><button className="icon-button" aria-label="Close comments" onClick={() => setShowComments(false)}><X size={15} /></button></div>
+          {replyTo && <div className="form-success"><span>Replying to {replyTo.author_name || replyTo.author_email}</span><button className="icon-button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><X size={14} /></button></div>}
+          <div className="actions"><input value={commentBody} onChange={event => setCommentBody(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void addComment() } }} placeholder="Comment or @mention a teammate…" aria-label="Comment" /><button className="button primary" disabled={busy || !commentBody.trim()} onClick={() => void addComment()}>Add comment</button></div>
+          {orderedComments.length === 0 ? <div className="empty">No comments yet.</div> : orderedComments.map(comment => <div className="task-row" key={comment.id} style={{ marginLeft: comment.parent_id ? 24 : 0, opacity: comment.resolved ? .65 : 1 }}><div className="task-copy"><strong>{comment.author_name || comment.author_email}</strong><span>{comment.content}</span><small>{new Date(comment.created_at).toLocaleString()} {comment.parent_id ? '· Reply' : ''}</small></div><div className="actions"><button className="button" onClick={() => { setReplyTo(comment); setCommentBody(`@${comment.author_email} `) }}>Reply</button><button className="button" onClick={() => void toggleComment(comment)}>{comment.resolved ? 'Reopen' : 'Resolve'}</button></div></div>)}
+        </aside>}
       </section> : <section className="card empty"><FileText size={32} /><p>Select a document, create one, or upload a compatible text file.</p><div className="actions"><button className="button" onClick={() => uploadInput.current?.click()}><Upload size={15} /> Upload</button><button className="button primary" onClick={() => void create()}><Plus size={15} /> New document</button></div></section>}
     </div>
-    {history.length > 0 && <div className="modal-backdrop" onClick={() => setHistory([])}><div className="card modal-card" onClick={event => event.stopPropagation()}><div className="card-header"><h2>Version history</h2><button className="icon-button" aria-label="Close history" onClick={() => setHistory([])}><X size={16} /></button></div>{history.map(version => <div className="task-row" key={version.id}><Clock size={15} /><div className="task-copy"><strong>Version {version.version}</strong><small>{version.title} · {new Date(version.created_at).toLocaleString()}</small></div></div>)}</div></div>}
+    {history.length > 0 && <div className="modal-backdrop" onClick={() => setHistory([])}><div className="card modal-card" onClick={event => event.stopPropagation()}><div className="card-header"><h2>Version history</h2><button className="icon-button" aria-label="Close history" onClick={() => setHistory([])}><X size={16} /></button></div>{history.map(version => <div className="task-row" key={version.id}><Clock size={15} /><div className="task-copy"><strong>Version {version.version}</strong><small>{version.title} · {new Date(version.created_at).toLocaleString()}</small></div>{active?.can_manage && <button className="button" disabled={busy || version.version === active.version} onClick={() => void restoreVersion(version)}>Restore</button>}</div>)}</div></div>}
     {deleteOpen && active && <div className="modal-backdrop" onClick={() => setDeleteOpen(false)}><div className="card modal-card confirmation-card" role="alertdialog" aria-modal="true" onClick={event => event.stopPropagation()}><div className="eyebrow">DOCUMENT / DELETE</div><h2>Delete “{active.title}”?</h2><p className="muted">This removes the document from the workspace for every team member. Its audit record is retained.</p><div className="actions"><button className="button" onClick={() => setDeleteOpen(false)}>Cancel</button><button className="button danger" disabled={busy} onClick={() => void removeDocument()}><Trash2 size={15} /> Delete document</button></div></div></div>}
     {shareOpen && active && <div className="modal-backdrop" onClick={() => setShareOpen(false)}><div className="card modal-card confirmation-card" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()}><div className="eyebrow">DOCUMENT / TEAM ACCESS</div><h2>Notify authorized team members?</h2><p className="muted">The document is already available to members of its Nexus team. Google SMTP will send each authorized member a direct link; it does not bypass workspace permissions.</p><div className="actions"><button className="button" onClick={() => setShareOpen(false)}>Cancel</button><button className="button primary" disabled={busy} onClick={() => void notifyTeam()}><Share2 size={15} /> Send notification</button></div></div></div>}
   </div></AppShell>

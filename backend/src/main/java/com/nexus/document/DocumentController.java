@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -26,14 +28,16 @@ import java.util.UUID;
 public class DocumentController {
     private final JdbcTemplate db;
     private final InvitationMailService mail;
+    private final SimpMessagingTemplate messages;
 
-    public DocumentController(JdbcTemplate db, InvitationMailService mail) {
+    public DocumentController(JdbcTemplate db, InvitationMailService mail, SimpMessagingTemplate messages) {
         this.db = db;
         this.mail = mail;
+        this.messages = messages;
     }
 
     record CreateDoc(@NotBlank String title, String content, UUID teamId) {}
-    record UpdateDoc(@NotBlank String title, String content) {}
+    record UpdateDoc(@NotBlank String title, String content, Integer expectedVersion) {}
 
     @GetMapping("/orgs/{orgId}/documents")
     public List<Map<String, Object>> list(@PathVariable UUID orgId, Authentication authentication) {
@@ -90,18 +94,46 @@ public class DocumentController {
         int version = ((Number) document.get("version")).intValue() + 1;
         String title = request.title().trim();
         String content = Objects.toString(request.content(), "");
-        db.update("UPDATE document.documents SET title=?,content=?,version=?,updated_at=now() WHERE id=?",
-                title, content, version, id);
+        int expectedVersion = request.expectedVersion() == null
+                ? ((Number) document.get("version")).intValue()
+                : request.expectedVersion();
+        int changed = db.update("UPDATE document.documents SET title=?,content=?,version=?,updated_at=now() WHERE id=? AND version=?",
+                title, content, version, id, expectedVersion);
+        if (changed == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This document changed in another session. Reload the latest version before saving.");
+        }
         db.update("INSERT INTO document.document_versions(id,document_id,version,title,content,created_by) VALUES(?,?,?,?,?,?)",
                 UUID.randomUUID(), id, version, title, content, userId);
         audit((UUID) document.get("organization_id"), userId, "document.updated", id);
-        return get(id, authentication);
+        Map<String, Object> result = get(id, authentication);
+        messages.convertAndSend("/topic/document." + id, result);
+        return result;
     }
 
     @GetMapping("/documents/{id}/versions")
     public List<Map<String, Object>> versions(@PathVariable UUID id, Authentication authentication) {
         get(id, authentication);
         return db.queryForList("SELECT id,version,title,created_by,created_at FROM document.document_versions WHERE document_id=? ORDER BY version DESC", id);
+    }
+
+    @PostMapping("/documents/{id}/versions/{versionId}/restore")
+    public Map<String, Object> restore(@PathVariable UUID id, @PathVariable UUID versionId,
+                                       Authentication authentication) {
+        UUID userId = user(authentication);
+        Map<String, Object> document = get(id, authentication);
+        requireManager(document, userId);
+        Map<String, Object> snapshot = db.queryForMap(
+                "SELECT title,content FROM document.document_versions WHERE id=? AND document_id=?", versionId, id);
+        int version = ((Number) document.get("version")).intValue() + 1;
+        db.update("UPDATE document.documents SET title=?,content=?,version=?,updated_at=now() WHERE id=?",
+                snapshot.get("title"), snapshot.get("content"), version, id);
+        db.update("INSERT INTO document.document_versions(id,document_id,version,title,content,created_by) VALUES(?,?,?,?,?,?)",
+                UUID.randomUUID(), id, version, snapshot.get("title"), snapshot.get("content"), userId);
+        audit((UUID) document.get("organization_id"), userId, "document.version_restored", id);
+        Map<String, Object> result = get(id, authentication);
+        messages.convertAndSend("/topic/document." + id, result);
+        return result;
     }
 
     @DeleteMapping("/documents/{id}")
