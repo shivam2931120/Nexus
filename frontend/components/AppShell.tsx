@@ -4,12 +4,12 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth, useClerk, useUser } from '@clerk/nextjs'
 import { useEffect, useState } from 'react'
-import { Activity, Bell, BookOpen, CalendarDays, CircleHelp, FolderKanban, Home, Inbox, ListTodo, LogOut, Menu, MessageCircle, Moon, Search, Settings, Sparkles, Sun, Users, Video, X } from './icons'
+import { Activity, Bell, BookOpen, CalendarDays, CircleHelp, FileText, FolderKanban, Home, Inbox, ListTodo, LogOut, Menu, MessageCircle, Moon, Search, Settings, Sparkles, Sun, Users, Video, X } from './icons'
 import { useWorkspace } from '../lib/workspace'
 import { api } from '../lib/api'
 
 const primary = [['/', 'Home', Home], ['/tasks', 'My Tasks', ListTodo], ['/chat', 'Inbox', Inbox]] as const
-const workspace = [['/teams', 'Teams', Users], ['/projects', 'Projects', FolderKanban], ['/calendar', 'Calendar', CalendarDays], ['/meetings', 'Meetings', Video], ['/files', 'File Drive', FolderKanban], ['/knowledge', 'Knowledge Base', BookOpen], ['/whiteboard', 'Whiteboard', FolderKanban], ['/assistant', 'NexusAI', Sparkles], ['/directory', 'Directory', Users], ['/analytics', 'Analytics', Activity], ['/audit', 'Audit log', Activity]] as const
+const workspace = [['/teams', 'Teams', Users], ['/projects', 'Projects', FolderKanban], ['/calendar', 'Calendar', CalendarDays], ['/meetings', 'Meetings', Video], ['/documents', 'Documents', FileText], ['/files', 'File Drive', FolderKanban], ['/knowledge', 'Knowledge Base', BookOpen], ['/whiteboard', 'Whiteboard', FolderKanban], ['/assistant', 'NexusAI', Sparkles], ['/directory', 'Directory', Users], ['/analytics', 'Analytics', Activity], ['/audit', 'Audit log', Activity]] as const
 type Result = { id: string; title?: string; content?: string; type: string }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
