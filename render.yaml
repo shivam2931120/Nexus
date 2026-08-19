@@ -15,8 +15,6 @@ services:
         sync: false
       - key: PG_PREPARE_THRESHOLD
         value: "0"
-      - key: REDIS_URL
-        sync: false
       - key: JWT_SECRET
         sync: false
       - key: JWT_ISSUER
@@ -66,4 +64,4 @@ services:
       - key: NEMOTRON_API_URL
         value: https://integrate.api.nvidia.com/v1/chat/completions
       - key: NEMOTRON_MODEL
-        value: nvidia/llama-3.1-nemotron-ultra-253b-v1
+        value: nvidia/nemotron-3-nano-30b-a3b

@@ -1,30 +1,138 @@
 package com.nexus.security;
 
-import com.nexus.auth.JwtService; import com.nexus.auth.User; import com.nexus.auth.UserRepository;
-import jakarta.servlet.FilterChain; import jakarta.servlet.ServletException; import jakarta.servlet.http.*;
-import org.springframework.context.annotation.*; import org.springframework.security.config.annotation.web.builders.HttpSecurity; import org.springframework.security.config.http.SessionCreationPolicy; import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; import org.springframework.security.crypto.password.PasswordEncoder; import org.springframework.security.authentication.UsernamePasswordAuthenticationToken; import org.springframework.security.core.authority.SimpleGrantedAuthority; import org.springframework.security.web.*; import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter; import org.springframework.stereotype.Component; import org.springframework.web.filter.OncePerRequestFilter;
-import java.io.IOException; import java.util.List;
+import com.nexus.auth.JwtService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.UUID;
 
 @Configuration
 public class SecurityConfig {
-    @Bean PasswordEncoder passwordEncoder(){return new BCryptPasswordEncoder();}
-    @Bean SecurityFilterChain security(HttpSecurity http,JwtFilter filter,ClerkJwtFilter clerkFilter)throws Exception{return http.csrf(c->c.disable()).cors(c->{}).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests(a->a.requestMatchers("/api/auth/**","/actuator/health/**","/v3/api-docs/**","/swagger-ui/**").permitAll().anyRequest().authenticated()).addFilterBefore(clerkFilter, UsernamePasswordAuthenticationFilter.class).addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class).build();}
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    SecurityFilterChain security(HttpSecurity http, JwtFilter localJwtFilter, ClerkJwtFilter clerkJwtFilter) throws Exception {
+        return http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> {})
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/**", "/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/ws", "/ws/**").permitAll()
+                        .anyRequest().authenticated())
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response, 401, "AUTHENTICATION_REQUIRED", "Sign in to continue."))
+                        .accessDeniedHandler((request, response, exception) -> writeSecurityError(response, 403, "ACCESS_DENIED", "You do not have access to this resource.")))
+                .addFilterBefore(localJwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(clerkJwtFilter, JwtFilter.class)
+                .build();
+    }
+
+    private static void writeSecurityError(HttpServletResponse response, int status, String code, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().printf("{\"code\":\"%s\",\"message\":\"%s\"}", code, message);
+    }
 }
 
-@Component class JwtFilter extends OncePerRequestFilter {
-    private final JwtService jwt; JwtFilter(JwtService jwt){this.jwt=jwt;}
-    protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException{var h=req.getHeader("Authorization");if(h!=null&&h.startsWith("Bearer ")){try{var id=jwt.parse(h.substring(7));var auth=new UsernamePasswordAuthenticationToken(id.toString(),null,List.of(new SimpleGrantedAuthority("ROLE_USER")));org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);}catch(Exception ignored){}}chain.doFilter(req,res);}
+@Component
+class JwtFilter extends OncePerRequestFilter {
+    private final JwtService jwt;
+
+    JwtFilter(JwtService jwt) {
+        this.jwt = jwt;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        if (org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
+            String header = request.getHeader("Authorization");
+            if (header != null && header.startsWith("Bearer ")) {
+                try {
+                    UUID userId = jwt.parse(header.substring(7));
+                    authenticate(userId);
+                } catch (Exception ignored) {
+                    // The Clerk filter gets the same token next. Invalid tokens remain unauthenticated.
+                }
+            }
+        }
+        chain.doFilter(request, response);
+    }
+
+    static void authenticate(UUID userId) {
+        var authentication = new UsernamePasswordAuthenticationToken(
+                userId.toString(), null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
 }
 
 @Component
 class ClerkJwtFilter extends OncePerRequestFilter {
-    private final org.springframework.security.oauth2.jwt.JwtDecoder decoder; private final UserRepository users;
-    ClerkJwtFilter(org.springframework.beans.factory.ObjectProvider<org.springframework.security.oauth2.jwt.JwtDecoder> decoder,UserRepository users){this.decoder=decoder.getIfAvailable();this.users=users;}
-    protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException{
-        if(org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication()!=null){chain.doFilter(req,res);return;}
-        var h=req.getHeader("Authorization"); if(decoder!=null&&h!=null&&h.startsWith("Bearer ")){try{var token=decoder.decode(h.substring(7));var sub=token.getSubject();var email=claim(token,"email");if(email.isBlank())email=sub+"@clerk.local";var resolvedEmail=email;var u=users.findByClerkId(sub).orElseGet(()->users.findByEmailIgnoreCase(resolvedEmail).orElseGet(()->users.save(new User(resolvedEmail,"{clerk}"+java.util.UUID.randomUUID(),displayName(token),sub))));var auth=new UsernamePasswordAuthenticationToken(u.getId().toString(),null,List.of(new SimpleGrantedAuthority("ROLE_USER")));org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);}catch(Exception ignored){}}
-        chain.doFilter(req,res);
+    private static final Logger log = LoggerFactory.getLogger(ClerkJwtFilter.class);
+    private final JwtDecoder decoder;
+    private final ClerkIdentityService identities;
+
+    ClerkJwtFilter(ObjectProvider<JwtDecoder> decoder, ClerkIdentityService identities) {
+        this.decoder = decoder.getIfAvailable();
+        this.identities = identities;
     }
-    private static String claim(org.springframework.security.oauth2.jwt.Jwt t,String name){var v=t.getClaimAsString(name);if(v==null&&"email".equals(name))v=t.getClaimAsString("email_address");return v==null?"":v;}
-    private static String displayName(org.springframework.security.oauth2.jwt.Jwt t){var name=claim(t,"name");if(!name.isBlank())return name;String first=claim(t,"first_name"),last=claim(t,"last_name");var full=(first+" "+last).trim();return full.isBlank()?"Clerk user":full;}
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        if (org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() == null) {
+            String header = request.getHeader("Authorization");
+            if (decoder != null && header != null && header.startsWith("Bearer ")) {
+                try {
+                    Jwt token = decoder.decode(header.substring(7));
+                    UUID userId = identities.resolve(token.getSubject(), email(token), displayName(token));
+                    JwtFilter.authenticate(userId);
+                } catch (Exception exception) {
+                    log.warn("Clerk authentication failed for {} {}: {}", request.getMethod(), request.getRequestURI(), exception.getClass().getSimpleName());
+                }
+            }
+        }
+        chain.doFilter(request, response);
+    }
+
+    private static String email(Jwt token) {
+        String email = claim(token, "email");
+        if (email.isBlank()) email = claim(token, "email_address");
+        return email.isBlank() ? token.getSubject() + "@clerk.local" : email;
+    }
+
+    private static String displayName(Jwt token) {
+        String name = claim(token, "name");
+        if (!name.isBlank()) return name;
+        String full = (claim(token, "first_name") + " " + claim(token, "last_name")).trim();
+        return full.isBlank() ? "Nexus user" : full;
+    }
+
+    private static String claim(Jwt token, String name) {
+        String value = token.getClaimAsString(name);
+        return value == null ? "" : value.trim();
+    }
 }

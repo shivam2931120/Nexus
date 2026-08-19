@@ -2,7 +2,7 @@
 
 import { useAuth, useUser } from '@clerk/nextjs'
 import { useEffect } from 'react'
-import { api } from '../lib/api'
+import { api, registerTokenProvider } from '../lib/api'
 
 export default function ClerkTokenBridge() {
   const { isLoaded, isSignedIn, getToken } = useAuth()
@@ -11,12 +11,12 @@ export default function ClerkTokenBridge() {
   useEffect(() => {
     if (!isLoaded) return
     if (!isSignedIn) {
-      localStorage.removeItem('nexus_token')
       localStorage.removeItem('nexus_name')
+      registerTokenProvider(null)
       return
     }
+    registerTokenProvider(getToken)
     const sync = () => void getToken().then((token) => {
-      if (token) localStorage.setItem('nexus_token', token)
       const displayName = user?.fullName ?? user?.firstName ?? 'Nexus user'
       if (user) {
         localStorage.setItem('nexus_name', displayName)
@@ -24,8 +24,7 @@ export default function ClerkTokenBridge() {
       }
     })
     sync()
-    const timer = window.setInterval(sync, 45000)
-    return () => window.clearInterval(timer)
+    return () => registerTokenProvider(null)
   }, [getToken, isLoaded, isSignedIn, user])
 
   return null

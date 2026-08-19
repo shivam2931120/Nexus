@@ -8,6 +8,7 @@ import { api } from '../../../lib/api'
 import { Copy, Mic, PhoneOff, Video, VideoOff } from '../../../components/icons'
 
 type MeetingToken = { serverUrl: string; token: string; room: string; identity: string }
+type JoinedMeeting = { meetingId: string; roomName: string }
 type AttachedTrack = { id: string; track: RemoteTrack | LocalTrack; label: string }
 type RoomMessage = { id: string; content: string; user_name?: string; created_at: string }
 
@@ -26,6 +27,8 @@ export default function MeetingRoomPage() {
   const { getToken } = useAuth()
   const [roomName, setRoomName] = useState('nexus-team-room')
   const [meetingId, setMeetingId] = useState('')
+  const [roomWasProvided, setRoomWasProvided] = useState(false)
+  const [routeReady, setRouteReady] = useState(false)
   const liveRoom = useRef<Room | null>(null)
   const [tracks, setTracks] = useState<AttachedTrack[]>([])
   const [mic, setMic] = useState(true)
@@ -40,8 +43,11 @@ export default function MeetingRoomPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    setRoomName(params.get('room') || 'nexus-team-room')
+    const requestedRoom = params.get('room')
+    setRoomName(requestedRoom || 'nexus-team-room')
+    setRoomWasProvided(Boolean(requestedRoom))
     setMeetingId(params.get('meetingId') || '')
+    setRouteReady(true)
   }, [])
 
   const leave = useCallback(() => {
@@ -51,6 +57,7 @@ export default function MeetingRoomPage() {
   }, [router])
 
   useEffect(() => {
+    if (!routeReady) return
     let cancelled = false
     const room = new Room()
     liveRoom.current = room
@@ -63,19 +70,23 @@ export default function MeetingRoomPage() {
       try {
         const token = await getToken()
         if (!token) throw new Error('Your sign-in session has expired. Please sign in again.')
-        if (meetingId) await api(`/meetings/${meetingId}/join`, { method: 'POST', token })
-        const data = await api<MeetingToken>(`/meetings/token?room=${encodeURIComponent(roomName)}`, { token })
+        let targetRoom = roomName
+        if (meetingId) {
+          const joined = await api<JoinedMeeting>(`/meetings/${meetingId}/join`, { method: 'POST', token })
+          if (!roomWasProvided) targetRoom = joined.roomName
+        }
+        const data = await api<MeetingToken>(`/meetings/token?room=${encodeURIComponent(targetRoom)}`, { token })
         if (cancelled) return
         await room.connect(data.serverUrl, data.token)
         await room.localParticipant.enableCameraAndMicrophone()
         room.localParticipant.trackPublications.forEach(publication => { if (publication.track) addTrack(publication.track, publication.trackSid, 'You') })
-        setStatus(`Live · ${roomName}`)
+        setStatus(`Live · ${targetRoom}`)
       } catch (reason) {
         if (!cancelled) { setStatus('Unable to join'); setError(reason instanceof Error ? reason.message : 'The meeting could not be started.') }
       }
     })()
     return () => { cancelled = true; room.disconnect(); liveRoom.current = null }
-  }, [getToken, meetingId, roomName])
+  }, [getToken, meetingId, roomName, roomWasProvided, routeReady])
 
   useEffect(() => { if (!meetingId) return; void Promise.all([api<RoomMessage[]>(`/meetings/${meetingId}/chat`), api<RoomMessage[]>(`/meetings/${meetingId}/notes`)]).then(([chat, noteItems]) => { setRoomMessages(chat); setNotes(noteItems) }).catch(() => {}) }, [meetingId])
 

@@ -10,7 +10,7 @@ Implemented:
 - PostgreSQL migrations with bounded-context schemas, UUID IDs, audit timestamps, and soft-delete columns
 - BCrypt authentication, signed JWT access tokens, protected API routes, and organization membership checks
 - Organizations, teams, channels, messages, projects, tasks, documents, and document versions
-- STOMP/WebSocket endpoint foundation, REST chat flow, Redis and LISTEN/NOTIFY integration points
+- STOMP/WebSocket endpoint foundation and persisted REST chat flow
 - Next.js 15 responsive shell with Nexus design tokens, dark mode, dashboard, chat, Kanban tasks, documents, projects, settings, and login/signup
 - Docker Compose, Dockerfiles, GitHub Actions, OpenAPI endpoint support, Actuator health/metrics
 
@@ -27,7 +27,7 @@ docker compose -f infra/docker-compose.yml up --build
 
 Open `http://localhost:3000`. The API is at `http://localhost:8080`, Swagger UI at `/swagger-ui/index.html`, and health at `/actuator/health`.
 
-For split local development, start PostgreSQL and Redis with the compose file (host ports `15432` and `16379`), then run:
+For split local development, start PostgreSQL with the compose file (host port `15432`), then run:
 
 ```bash
 cd backend && mvn spring-boot:run
@@ -47,4 +47,4 @@ Never commit `.env`, OAuth secrets, JWT keys, R2 credentials, or production endp
 
 ## Architecture notes
 
-The backend is a modular monolith so Phase 1 remains easy to run and test. Packages map to the service boundaries in the TRD and can be extracted later. PostgreSQL schemas separate bounded contexts, while every organization-owned query is scoped by authenticated membership. Redis is reserved for presence/cache and cross-node real-time support. STOMP uses `/ws`, `/app`, and `/topic` destinations.
+The backend is a modular monolith so Phase 1 remains easy to run and test. Packages map to the service boundaries in the TRD and can be extracted later. PostgreSQL schemas separate bounded contexts, while every organization-owned query is scoped by authenticated membership. STOMP uses `/ws`, `/app`, and `/topic` destinations.

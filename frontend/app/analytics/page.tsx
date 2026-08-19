@@ -17,7 +17,17 @@ export default function AnalyticsPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (orgId) void Promise.all([api<Summary>(`/orgs/${orgId}/analytics/summary`), api<Trends>(`/orgs/${orgId}/analytics/trends`)]).then(([totals, series]) => { setSummary(totals); setTrends(series) }).catch(err => setError(err instanceof Error ? err.message : 'Analytics could not be loaded.'))
+    if (!orgId) return
+    setError('')
+    void Promise.allSettled([
+      api<Summary>(`/orgs/${orgId}/analytics/summary`),
+      api<Trends>(`/orgs/${orgId}/analytics/trends`),
+    ]).then(([totals, series]) => {
+      if (totals.status === 'fulfilled') setSummary(totals.value)
+      if (series.status === 'fulfilled') setTrends(series.value)
+      const failed = [totals, series].find(result => result.status === 'rejected')
+      if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : 'Some analytics could not be loaded.')
+    })
   }, [orgId])
 
   const metrics = [

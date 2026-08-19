@@ -19,11 +19,6 @@ spring:
     enabled: true
     schemas: public,nexus_auth,org,chat,project,document,calendar,nexus_storage,notification,audit,meeting,integration,knowledge,whiteboard
     create-schemas: true
-  data:
-    redis:
-      url: ${REDIS_URL:redis://localhost:6379}
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
@@ -33,6 +28,10 @@ spring:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
   health:
     mail:
       enabled: false
@@ -49,7 +48,7 @@ nexus:
   nemotron:
     api-key: ${NVIDIA_API_KEY:${NEMOTRON_API_KEY:}}
     api-url: ${NEMOTRON_API_URL:https://integrate.api.nvidia.com/v1/chat/completions}
-    model: ${NEMOTRON_MODEL:nvidia/llama-3.1-nemotron-ultra-253b-v1}
+    model: ${NEMOTRON_MODEL:nvidia/nemotron-3-nano-30b-a3b}
 server:
   port: ${PORT:${SERVER_PORT:8080}}
 livekit:

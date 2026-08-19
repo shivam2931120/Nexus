@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import ErrorState from '../components/ErrorState'
 import './globals.css'
-import './forge-app.css'
+import './nexus-app.css'
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => { console.error(error) }, [error])

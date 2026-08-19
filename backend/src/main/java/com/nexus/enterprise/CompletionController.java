@@ -9,6 +9,9 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -21,11 +24,12 @@ public class CompletionController {
     private final String nemotronKey;
     private final String nemotronUrl;
     private final String nemotronModel;
+    private final com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public CompletionController(JdbcTemplate db, OrganizationController organizations,
                                 @Value("${nexus.nemotron.api-key:}") String nemotronKey,
                                 @Value("${nexus.nemotron.api-url:https://integrate.api.nvidia.com/v1/chat/completions}") String nemotronUrl,
-                                @Value("${nexus.nemotron.model:nvidia/llama-3.1-nemotron-ultra-253b-v1}") String nemotronModel) {
+                                @Value("${nexus.nemotron.model:nvidia/nemotron-3-nano-30b-a3b}") String nemotronModel) {
         this.db = db; this.organizations = organizations; this.nemotronKey = nemotronKey;
         this.nemotronUrl = nemotronUrl; this.nemotronModel = nemotronModel;
     }
@@ -47,11 +51,11 @@ public class CompletionController {
         UUID uid = user(a);
         return Map.of(
             "user", db.queryForMap("SELECT id,name,email FROM nexus_auth.users WHERE id=?", uid),
-            "meetings", db.queryForList("SELECT id,title,scheduled_at,duration_minutes,room_name FROM meeting.meetings WHERE organization_id=? AND deleted_at IS NULL AND (scheduled_at IS NULL OR scheduled_at>=now()) ORDER BY scheduled_at NULLS FIRST LIMIT 5", orgId),
+            "meetings", db.queryForList("SELECT id,title,scheduled_at,duration_minutes,room_name FROM meeting.meetings m WHERE organization_id=? AND deleted_at IS NULL AND (scheduled_at IS NULL OR scheduled_at>=now()) AND (team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=m.team_id AND tm.user_id=?)) ORDER BY scheduled_at NULLS FIRST LIMIT 5", orgId,uid),
             "tasks", db.queryForList("SELECT id,title,status,priority,due_date,project_id FROM project.tasks WHERE organization_id=? AND assignee_id=? AND deleted_at IS NULL ORDER BY due_date NULLS LAST LIMIT 8", orgId, uid),
             "notifications", db.queryForList("SELECT id,title,body,read_at,created_at FROM notification.notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 8", uid),
-            "documents", db.queryForList("SELECT id,title,updated_at,version FROM document.documents WHERE organization_id=? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 5", orgId),
-            "messages", db.queryForList("SELECT m.id,m.content,m.created_at,c.name channel_name,u.name sender_name FROM chat.messages m JOIN chat.channels c ON c.id=m.channel_id JOIN nexus_auth.users u ON u.id=m.sender_id WHERE m.organization_id=? AND m.deleted_at IS NULL ORDER BY m.created_at DESC LIMIT 8", orgId),
+            "documents", db.queryForList("SELECT id,title,updated_at,version FROM document.documents d WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=d.team_id AND tm.user_id=?)) ORDER BY updated_at DESC LIMIT 5", orgId,uid),
+            "messages", db.queryForList("SELECT m.id,m.content,m.created_at,c.name channel_name,u.name sender_name FROM chat.messages m JOIN chat.channels c ON c.id=m.channel_id JOIN nexus_auth.users u ON u.id=m.sender_id WHERE m.organization_id=? AND m.deleted_at IS NULL AND (c.team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=c.team_id AND tm.user_id=?)) AND (c.type<>'PRIVATE' OR EXISTS (SELECT 1 FROM chat.channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=?)) ORDER BY m.created_at DESC LIMIT 8", orgId,uid,uid),
             "activity", db.queryForList("SELECT e.action,e.entity_type,e.created_at,u.name actor_name FROM audit.events e JOIN nexus_auth.users u ON u.id=e.actor_id WHERE e.organization_id=? ORDER BY e.created_at DESC LIMIT 8", orgId)
         );
     }
@@ -61,8 +65,8 @@ public class CompletionController {
         member(orgId, a);
         return Map.of(
             "tasksByStatus", db.queryForList("SELECT status,count(*) value FROM project.tasks WHERE organization_id=? AND deleted_at IS NULL GROUP BY status ORDER BY status", orgId),
-            "messagesByDay", db.queryForList("SELECT date_trunc('day',created_at) day,count(*) value FROM chat.messages WHERE organization_id=? AND deleted_at IS NULL AND created_at>=now()-interval '30 days' GROUP BY 1 ORDER BY 1", orgId),
-            "eventsByDay", db.queryForList("SELECT date_trunc('day',starts_at) day,count(*) value FROM calendar.events WHERE organization_id=? AND deleted_at IS NULL AND starts_at>=now()-interval '30 days' GROUP BY 1 ORDER BY 1", orgId),
+            "messagesByDay", db.queryForList("SELECT date_trunc('day',created_at) AS \"day\",count(*) AS value FROM chat.messages WHERE organization_id=? AND deleted_at IS NULL AND created_at>=now()-interval '30 days' GROUP BY 1 ORDER BY 1", orgId),
+            "eventsByDay", db.queryForList("SELECT date_trunc('day',starts_at) AS \"day\",count(*) AS value FROM calendar.events WHERE organization_id=? AND deleted_at IS NULL AND starts_at>=now()-interval '30 days' GROUP BY 1 ORDER BY 1", orgId),
             "storageByType", db.queryForList("SELECT mime_type type,sum(size_bytes) bytes,count(*) files FROM nexus_storage.files WHERE organization_id=? AND deleted_at IS NULL GROUP BY mime_type ORDER BY bytes DESC", orgId)
         );
     }
@@ -91,11 +95,11 @@ public class CompletionController {
     }
 
     @PostMapping("/channels/{channelId}/messages/{messageId}/reactions")
-    public void react(@PathVariable UUID channelId, @PathVariable UUID messageId, @Valid @RequestBody ReactionRequest r, org.springframework.security.core.Authentication a) { UUID org = channelOrg(channelId); member(org, a); db.update("INSERT INTO chat.message_reactions(message_id,user_id,emoji) VALUES(?,?,?) ON CONFLICT DO NOTHING", messageId, user(a), r.emoji()); }
+    public void react(@PathVariable UUID channelId, @PathVariable UUID messageId, @Valid @RequestBody ReactionRequest r, org.springframework.security.core.Authentication a) { UUID org = channelOrg(channelId); member(org, a); messageInChannel(channelId,messageId); db.update("INSERT INTO chat.message_reactions(message_id,user_id,emoji) VALUES(?,?,?) ON CONFLICT DO NOTHING", messageId, user(a), r.emoji()); }
     @DeleteMapping("/channels/{channelId}/messages/{messageId}/reactions/{emoji}")
-    public void unreact(@PathVariable UUID channelId, @PathVariable UUID messageId, @PathVariable String emoji, org.springframework.security.core.Authentication a) { member(channelOrg(channelId), a); db.update("DELETE FROM chat.message_reactions WHERE message_id=? AND user_id=? AND emoji=?", messageId, user(a), emoji); }
+    public void unreact(@PathVariable UUID channelId, @PathVariable UUID messageId, @PathVariable String emoji, org.springframework.security.core.Authentication a) { member(channelOrg(channelId), a); messageInChannel(channelId,messageId); db.update("DELETE FROM chat.message_reactions WHERE message_id=? AND user_id=? AND emoji=?", messageId, user(a), emoji); }
     @PostMapping("/channels/{channelId}/messages/{messageId}/pin")
-    public void pin(@PathVariable UUID channelId, @PathVariable UUID messageId, org.springframework.security.core.Authentication a) { member(channelOrg(channelId), a); db.update("INSERT INTO chat.pinned_messages(channel_id,message_id,pinned_by) VALUES(?,?,?) ON CONFLICT DO NOTHING", channelId, messageId, user(a)); }
+    public void pin(@PathVariable UUID channelId, @PathVariable UUID messageId, org.springframework.security.core.Authentication a) { member(channelOrg(channelId), a); messageInChannel(channelId,messageId); db.update("INSERT INTO chat.pinned_messages(channel_id,message_id,pinned_by) VALUES(?,?,?) ON CONFLICT DO NOTHING", channelId, messageId, user(a)); }
     @DeleteMapping("/channels/{channelId}/messages/{messageId}/pin")
     public void unpin(@PathVariable UUID channelId, @PathVariable UUID messageId, org.springframework.security.core.Authentication a) { member(channelOrg(channelId), a); db.update("DELETE FROM chat.pinned_messages WHERE channel_id=? AND message_id=?", channelId, messageId); }
     @PatchMapping("/messages/{messageId}")
@@ -113,26 +117,33 @@ public class CompletionController {
     @GetMapping("/documents/{documentId}/comments") public List<Map<String,Object>> documentComments(@PathVariable UUID documentId,org.springframework.security.core.Authentication a){UUID org=documentOrg(documentId);member(org,a);return db.queryForList("SELECT c.id,c.content,c.selection_start,c.selection_end,c.resolved,c.created_at,u.name user_name FROM document.comments c JOIN nexus_auth.users u ON u.id=c.user_id WHERE c.document_id=? ORDER BY c.created_at",documentId);}
     @PostMapping("/documents/{documentId}/comments") public Map<String,Object> documentComment(@PathVariable UUID documentId,@Valid @RequestBody CommentRequest r,org.springframework.security.core.Authentication a){UUID org=documentOrg(documentId);member(org,a);UUID id=UUID.randomUUID();db.update("INSERT INTO document.comments(id,document_id,user_id,content,selection_start,selection_end) VALUES(?,?,?,?,?,?)",id,documentId,user(a),r.content().trim(),r.selectionStart(),r.selectionEnd());return db.queryForMap("SELECT id,content,selection_start,selection_end,resolved,created_at FROM document.comments WHERE id=?",id);}
     @PatchMapping("/documents/comments/{commentId}/resolve") public void resolveComment(@PathVariable UUID commentId,org.springframework.security.core.Authentication a){Map<String,Object> row=db.queryForMap("SELECT document_id FROM document.comments WHERE id=?",commentId);member(documentOrg((UUID)row.get("document_id")),a);db.update("UPDATE document.comments SET resolved=true WHERE id=?",commentId);}
-    @PostMapping("/documents/{documentId}/restore/{version}") public Map<String,Object> restore(@PathVariable UUID documentId,@PathVariable int version,org.springframework.security.core.Authentication a){UUID org=documentOrg(documentId);member(org,a);Map<String,Object> v=db.queryForMap("SELECT title,content FROM document.document_versions WHERE document_id=? AND version=?",documentId,version);db.update("UPDATE document.documents SET title=?,content=?,version=?,updated_at=now() WHERE id=?",v.get("title"),v.get("content"),version,documentId);return db.queryForMap("SELECT id,title,content,version,team_id,updated_at FROM document.documents WHERE id=?",documentId);}
+    @PostMapping("/documents/{documentId}/restore/{version}") public Map<String,Object> restore(@PathVariable UUID documentId,@PathVariable int version,org.springframework.security.core.Authentication a){UUID org=documentOrg(documentId);member(org,a);Map<String,Object> v=db.queryForMap("SELECT title,content FROM document.document_versions WHERE document_id=? AND version=?",documentId,version);Integer next=db.queryForObject("SELECT version+1 FROM document.documents WHERE id=?",Integer.class,documentId);db.update("UPDATE document.documents SET title=?,content=?,version=?,updated_at=now() WHERE id=?",v.get("title"),v.get("content"),next,documentId);db.update("INSERT INTO document.document_versions(id,document_id,version,title,content,created_by) VALUES(?,?,?,?,?,?)",UUID.randomUUID(),documentId,next,v.get("title"),v.get("content"),user(a));return db.queryForMap("SELECT id,title,content,version,team_id,updated_at FROM document.documents WHERE id=?",documentId);}
 
     @GetMapping("/meetings/{meetingId}/notes") public List<Map<String,Object>> notes(@PathVariable UUID meetingId,org.springframework.security.core.Authentication a){UUID org=meetingOrg(meetingId);member(org,a);return db.queryForList("SELECT n.id,n.content,n.created_at,u.name user_name FROM meeting.notes n JOIN nexus_auth.users u ON u.id=n.user_id WHERE n.meeting_id=? ORDER BY n.created_at",meetingId);}
     @PostMapping("/meetings/{meetingId}/notes") public Map<String,Object> note(@PathVariable UUID meetingId,@Valid @RequestBody CommentRequest r,org.springframework.security.core.Authentication a){UUID org=meetingOrg(meetingId);member(org,a);UUID id=UUID.randomUUID();db.update("INSERT INTO meeting.notes(id,meeting_id,user_id,content) VALUES(?,?,?,?)",id,meetingId,user(a),r.content());return db.queryForMap("SELECT id,content,created_at FROM meeting.notes WHERE id=?",id);}
     @GetMapping("/meetings/{meetingId}/chat") public List<Map<String,Object>> meetingChat(@PathVariable UUID meetingId,org.springframework.security.core.Authentication a){member(meetingOrg(meetingId),a);return db.queryForList("SELECT c.id,c.content,c.created_at,u.name user_name FROM meeting.chat_messages c JOIN nexus_auth.users u ON u.id=c.user_id WHERE c.meeting_id=? ORDER BY c.created_at",meetingId);}
     @PostMapping("/meetings/{meetingId}/chat") public Map<String,Object> meetingMessage(@PathVariable UUID meetingId,@Valid @RequestBody CommentRequest r,org.springframework.security.core.Authentication a){member(meetingOrg(meetingId),a);UUID id=UUID.randomUUID();db.update("INSERT INTO meeting.chat_messages(id,meeting_id,user_id,content) VALUES(?,?,?,?)",id,meetingId,user(a),r.content());return db.queryForMap("SELECT id,content,created_at FROM meeting.chat_messages WHERE id=?",id);}
 
-    @GetMapping("/orgs/{orgId}/whiteboards") public List<Map<String,Object>> boards(@PathVariable UUID orgId,org.springframework.security.core.Authentication a){member(orgId,a);return db.queryForList("SELECT id,name,team_id,data,created_at,updated_at FROM whiteboard.boards WHERE organization_id=? AND deleted_at IS NULL ORDER BY updated_at DESC",orgId);}
-    @PostMapping("/orgs/{orgId}/whiteboards") public Map<String,Object> board(@PathVariable UUID orgId,@Valid @RequestBody BoardRequest r,org.springframework.security.core.Authentication a){member(orgId,a);UUID id=UUID.randomUUID();db.update("INSERT INTO whiteboard.boards(id,organization_id,team_id,name,data,created_by) VALUES(?,?,?,?,'{}'::jsonb,?)",id,orgId,r.teamId(),r.name().trim(),user(a));return db.queryForMap("SELECT id,name,team_id,data,created_at,updated_at FROM whiteboard.boards WHERE id=?",id);}
-    @PutMapping("/whiteboards/{id}") public Map<String,Object> updateBoard(@PathVariable UUID id,@Valid @RequestBody BoardUpdate r,org.springframework.security.core.Authentication a){Map<String,Object> row=db.queryForMap("SELECT organization_id FROM whiteboard.boards WHERE id=? AND deleted_at IS NULL",id);member((UUID)row.get("organization_id"),a);db.update("UPDATE whiteboard.boards SET name=?,data=?::jsonb,updated_at=now() WHERE id=?",r.name().trim(),toJson(r.data()),id);return db.queryForMap("SELECT id,name,team_id,data,created_at,updated_at FROM whiteboard.boards WHERE id=?",id);}
+    @GetMapping("/orgs/{orgId}/whiteboards") public List<Map<String,Object>> boards(@PathVariable UUID orgId,org.springframework.security.core.Authentication a){member(orgId,a);return db.queryForList("SELECT id,name,team_id,data::text AS data,created_at,updated_at FROM whiteboard.boards WHERE organization_id=? AND deleted_at IS NULL ORDER BY updated_at DESC",orgId).stream().map(this::boardJson).toList();}
+    @PostMapping("/orgs/{orgId}/whiteboards") public Map<String,Object> board(@PathVariable UUID orgId,@Valid @RequestBody BoardRequest r,org.springframework.security.core.Authentication a){member(orgId,a);UUID id=UUID.randomUUID();db.update("INSERT INTO whiteboard.boards(id,organization_id,team_id,name,data,created_by) VALUES(?,?,?,?,'{}'::jsonb,?)",id,orgId,r.teamId(),r.name().trim(),user(a));return boardJson(db.queryForMap("SELECT id,name,team_id,data::text AS data,created_at,updated_at FROM whiteboard.boards WHERE id=?",id));}
+    @PutMapping("/whiteboards/{id}") public Map<String,Object> updateBoard(@PathVariable UUID id,@Valid @RequestBody BoardUpdate r,org.springframework.security.core.Authentication a){Map<String,Object> row=db.queryForMap("SELECT organization_id FROM whiteboard.boards WHERE id=? AND deleted_at IS NULL",id);member((UUID)row.get("organization_id"),a);db.update("UPDATE whiteboard.boards SET name=?,data=?::jsonb,updated_at=now() WHERE id=?",r.name().trim(),toJson(r.data()),id);return boardJson(db.queryForMap("SELECT id,name,team_id,data::text AS data,created_at,updated_at FROM whiteboard.boards WHERE id=?",id));}
 
     @PostMapping(value="/ai/chat", consumes=MediaType.APPLICATION_JSON_VALUE)
     public Map<String,Object> ai(@Valid @RequestBody AiRequest request, org.springframework.security.core.Authentication a) {
         user(a);
-        if (nemotronKey.isBlank()) return Map.of("configured", false, "answer", "Nemotron is not configured on the backend yet. Add NEMOTRON_API_KEY to Render and retry.");
-        Map<String,Object> body=Map.of("model",nemotronModel,"messages",List.of(Map.of("role","system","content","You are Nexus AI, a concise enterprise workspace assistant. Use the supplied workspace context, never invent records, and clearly say when data is missing."),Map.of("role","user","content",request.message()+"\n\nWorkspace context:\n"+Objects.toString(request.context(),"No additional context."))),"temperature",0.2,"max_tokens",1200);
-        Map<?,?> response=RestClient.create().post().uri(nemotronUrl).header("Authorization","Bearer "+nemotronKey).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(Map.class);
-        Object choices=response==null?null:response.get("choices"); if (!(choices instanceof List<?> list) || list.isEmpty()) throw new IllegalStateException("Nemotron returned no answer.");
+        if (nemotronKey.isBlank()) return Map.of("configured", false, "answer", "NexusAI is not configured on the backend yet. Add the server-side AI provider key and retry.");
+        Map<String,Object> body=Map.of("model",nemotronModel,"messages",List.of(Map.of("role","system","content","You are NexusAI, a concise enterprise workspace assistant. Use the supplied workspace context, never invent records, and clearly say when data is missing."),Map.of("role","user","content",request.message()+"\n\nWorkspace context:\n"+Objects.toString(request.context(),"No additional context."))),"temperature",0.2,"max_tokens",1200);
+        Map<?,?> response;
+        try {
+            response=RestClient.create().post().uri(nemotronUrl).header("Authorization","Bearer "+nemotronKey).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(Map.class);
+        } catch (RestClientResponseException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The configured NexusAI model is unavailable. Verify the server-side AI provider configuration and retry.");
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The AI provider could not be reached. Retry in a moment.");
+        }
+        Object choices=response==null?null:response.get("choices"); if (!(choices instanceof List<?> list) || list.isEmpty()) throw new IllegalStateException("NexusAI returned no answer.");
         Object first=list.get(0); Object message=first instanceof Map<?,?> map?map.get("message"):null; Object content=message instanceof Map<?,?> map?map.get("content"):null;
-        return Map.of("configured",true,"answer",Objects.toString(content,"Nemotron returned an empty answer."));
+        return Map.of("configured",true,"answer",Objects.toString(content,"NexusAI returned an empty answer."));
     }
 
     private UUID user(org.springframework.security.core.Authentication a){return UUID.fromString(a.getName());}
@@ -143,5 +154,7 @@ public class CompletionController {
     private UUID taskOrg(UUID task){return db.queryForObject("SELECT organization_id FROM project.tasks WHERE id=? AND deleted_at IS NULL",UUID.class,task);}
     private UUID documentOrg(UUID doc){return db.queryForObject("SELECT organization_id FROM document.documents WHERE id=? AND deleted_at IS NULL",UUID.class,doc);}
     private UUID meetingOrg(UUID meeting){return db.queryForObject("SELECT organization_id FROM meeting.meetings WHERE id=? AND deleted_at IS NULL",UUID.class,meeting);}
-    private String toJson(Object value){try{return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value==null?List.of():value);}catch(Exception e){throw new IllegalArgumentException("Invalid JSON payload.",e);}}
+    private void messageInChannel(UUID channel,UUID message){if(db.queryForObject("SELECT count(*) FROM chat.messages WHERE id=? AND channel_id=? AND deleted_at IS NULL",Integer.class,message,channel)==0)throw new IllegalArgumentException("Message does not belong to this channel.");}
+    private Map<String,Object> boardJson(Map<String,Object> row){Object raw=row.get("data");if(raw instanceof String value){try{row.put("data",json.readValue(value,Map.class));}catch(Exception e){throw new IllegalStateException("Stored whiteboard data is invalid.",e);}}return row;}
+    private String toJson(Object value){try{return json.writeValueAsString(value==null?List.of():value);}catch(Exception e){throw new IllegalArgumentException("Invalid JSON payload.",e);}}
 }

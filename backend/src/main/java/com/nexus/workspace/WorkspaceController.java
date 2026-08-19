@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
@@ -26,8 +27,10 @@ public class WorkspaceController {
     record CreateInvitation(@Email @NotBlank String email, String role) {}
 
     @GetMapping("/bootstrap")
+    @Transactional
     public Map<String,Object> bootstrap(@RequestParam(required=false) UUID orgId, org.springframework.security.core.Authentication auth) {
         UUID uid = user(auth);
+        db.queryForObject("SELECT pg_advisory_xact_lock(hashtext(?))", Object.class, uid.toString());
         List<Map<String,Object>> memberships = db.queryForList("SELECT o.id,o.name,o.slug,m.role FROM org.organizations o JOIN org.memberships m ON m.organization_id=o.id WHERE m.user_id=? AND o.deleted_at IS NULL ORDER BY o.created_at", uid);
         UUID activeOrgId;
         String orgName;
@@ -45,28 +48,30 @@ public class WorkspaceController {
             Map<String,Object> row = orgId == null ? memberships.get(0) : memberships.stream().filter(item -> orgId.equals(item.get("id"))).findFirst().orElse(memberships.get(0));
             activeOrgId = (UUID) row.get("id"); orgName = (String) row.get("name"); role = (String) row.get("role");
         }
-        List<Map<String,Object>> teams = db.queryForList("SELECT id,name,description FROM org.teams WHERE organization_id=? AND deleted_at IS NULL ORDER BY created_at", activeOrgId);
+        List<Map<String,Object>> teams = db.queryForList("SELECT t.id,t.name,t.description FROM org.teams t JOIN org.team_members tm ON tm.team_id=t.id WHERE t.organization_id=? AND t.deleted_at IS NULL AND tm.user_id=? ORDER BY t.created_at", activeOrgId, uid);
         UUID teamId;
         if (teams.isEmpty()) {
-            teamId = UUID.randomUUID();
-            db.update("INSERT INTO org.teams(id,organization_id,name,description) VALUES (?,?,?,?)", teamId, activeOrgId, "General", "Default workspace team");
+            List<UUID> general = db.query("SELECT id FROM org.teams WHERE organization_id=? AND deleted_at IS NULL AND lower(name)='general' ORDER BY created_at LIMIT 1", (rs,row)->UUID.fromString(rs.getString(1)), activeOrgId);
+            teamId = general.isEmpty() ? UUID.randomUUID() : general.get(0);
+            if (general.isEmpty()) {
+                db.update("INSERT INTO org.teams(id,organization_id,name,description) VALUES (?,?,?,?)", teamId, activeOrgId, "General", "Default workspace team");
+                db.update("INSERT INTO chat.channels(id,organization_id,team_id,name,type) VALUES (?,?,?,?,?)", UUID.randomUUID(), activeOrgId, teamId, "general", "PUBLIC");
+            }
             db.update("INSERT INTO org.team_members(team_id,user_id) VALUES (?,?)", teamId, uid);
-            db.update("INSERT INTO chat.channels(id,organization_id,team_id,name,type) VALUES (?,?,?,?,?)", UUID.randomUUID(), activeOrgId, teamId, "general", "PUBLIC");
             teams = db.queryForList("SELECT id,name,description FROM org.teams WHERE id=?", teamId);
         } else {
             teamId = (UUID) teams.get(0).get("id");
-            if (db.queryForObject("SELECT count(*) FROM org.team_members WHERE team_id=? AND user_id=?", Integer.class, teamId, uid) == 0) db.update("INSERT INTO org.team_members(team_id,user_id) VALUES (?,?)", teamId, uid);
         }
-        List<Map<String,Object>> channels = db.queryForList("SELECT id,name,type,team_id FROM chat.channels WHERE organization_id=? AND deleted_at IS NULL ORDER BY name", activeOrgId);
+        List<Map<String,Object>> channels = db.queryForList("SELECT c.id,c.name,c.type,c.team_id FROM chat.channels c WHERE c.organization_id=? AND c.deleted_at IS NULL AND (c.team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=c.team_id AND tm.user_id=?)) AND (c.type<>'PRIVATE' OR EXISTS (SELECT 1 FROM chat.channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=?)) ORDER BY c.name", activeOrgId, uid, uid);
         return Map.of("user", db.queryForMap("SELECT id,email,name FROM nexus_auth.users WHERE id=?", uid), "organization", Map.of("id", activeOrgId, "name", orgName, "role", role), "team", teams.get(0), "channels", channels);
     }
 
-    @GetMapping("/orgs/{orgId}/events") public List<Map<String,Object>> events(@PathVariable UUID orgId, org.springframework.security.core.Authentication a) { member(orgId,a); return db.queryForList("SELECT id,title,description,starts_at,ends_at,kind,team_id FROM calendar.events WHERE organization_id=? AND deleted_at IS NULL ORDER BY starts_at", orgId); }
-    @PostMapping("/orgs/{orgId}/events") public Map<String,Object> createEvent(@PathVariable UUID orgId, @Valid @RequestBody CreateEvent r, org.springframework.security.core.Authentication a) { UUID uid=user(a); member(orgId,a); UUID id=UUID.randomUUID(); OffsetDateTime start=Objects.requireNonNullElse(r.startsAt(), OffsetDateTime.now()); OffsetDateTime end=Objects.requireNonNullElse(r.endsAt(), start.plusHours(1)); db.update("INSERT INTO calendar.events(id,organization_id,team_id,title,description,starts_at,ends_at,kind,created_by) VALUES(?,?,?,?,?,?,?,?,?)", id,orgId,r.teamId(),r.title(),Objects.toString(r.description(),""),start,end,Objects.toString(r.kind(),"WORK"),uid); audit(orgId,uid,"event.created","event",id); return db.queryForMap("SELECT id,title,description,starts_at,ends_at,kind,team_id FROM calendar.events WHERE id=?",id); }
+    @GetMapping("/orgs/{orgId}/events") public List<Map<String,Object>> events(@PathVariable UUID orgId, org.springframework.security.core.Authentication a) { member(orgId,a); return db.queryForList("SELECT id,title,description,starts_at,ends_at,kind,team_id FROM calendar.events e WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=e.team_id AND tm.user_id=?)) ORDER BY starts_at", orgId,user(a)); }
+    @PostMapping("/orgs/{orgId}/events") public Map<String,Object> createEvent(@PathVariable UUID orgId, @Valid @RequestBody CreateEvent r, org.springframework.security.core.Authentication a) { UUID uid=user(a); member(orgId,a); team(orgId,r.teamId(),uid); UUID id=UUID.randomUUID(); OffsetDateTime start=Objects.requireNonNullElse(r.startsAt(), OffsetDateTime.now()); OffsetDateTime end=Objects.requireNonNullElse(r.endsAt(), start.plusHours(1)); if(!end.isAfter(start))throw new IllegalArgumentException("Event end time must be after its start time."); db.update("INSERT INTO calendar.events(id,organization_id,team_id,title,description,starts_at,ends_at,kind,created_by) VALUES(?,?,?,?,?,?,?,?,?)", id,orgId,r.teamId(),r.title().trim(),Objects.toString(r.description(),""),start,end,Objects.toString(r.kind(),"WORK"),uid); audit(orgId,uid,"event.created","event",id); return db.queryForMap("SELECT id,title,description,starts_at,ends_at,kind,team_id FROM calendar.events WHERE id=?",id); }
     @DeleteMapping("/events/{id}") public void deleteEvent(@PathVariable UUID id, org.springframework.security.core.Authentication a) { Map<String,Object> e=db.queryForMap("SELECT organization_id FROM calendar.events WHERE id=? AND deleted_at IS NULL",id); member((UUID)e.get("organization_id"),a); db.update("UPDATE calendar.events SET deleted_at=now() WHERE id=?",id); audit((UUID)e.get("organization_id"),user(a),"event.deleted","event",id); }
 
-    @GetMapping("/orgs/{orgId}/files") public List<Map<String,Object>> files(@PathVariable UUID orgId, org.springframework.security.core.Authentication a) { member(orgId,a); return db.queryForList("SELECT id,name,object_key,mime_type,size_bytes,created_at,team_id FROM nexus_storage.files WHERE organization_id=? AND deleted_at IS NULL ORDER BY created_at DESC",orgId); }
-    @PostMapping("/orgs/{orgId}/files") public Map<String,Object> createFile(@PathVariable UUID orgId,@Valid @RequestBody CreateFile r,org.springframework.security.core.Authentication a) { UUID uid=user(a); member(orgId,a); UUID id=UUID.randomUUID(); String key=Objects.requireNonNullElse(r.objectKey(),orgId+"/"+id+"/"+r.name()); db.update("INSERT INTO nexus_storage.files(id,organization_id,team_id,name,object_key,mime_type,size_bytes,created_by) VALUES(?,?,?,?,?,?,?,?)",id,orgId,r.teamId(),r.name(),key,Objects.requireNonNullElse(r.mimeType(),"application/octet-stream"),Objects.requireNonNullElse(r.sizeBytes(),0L),uid); audit(orgId,uid,"file.created","file",id); return db.queryForMap("SELECT id,name,object_key,mime_type,size_bytes,created_at,team_id FROM nexus_storage.files WHERE id=?",id); }
+    @GetMapping("/orgs/{orgId}/files") public List<Map<String,Object>> files(@PathVariable UUID orgId, org.springframework.security.core.Authentication a) { member(orgId,a); return db.queryForList("SELECT id,name,object_key,mime_type,size_bytes,created_at,team_id FROM nexus_storage.files f WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS (SELECT 1 FROM org.team_members tm WHERE tm.team_id=f.team_id AND tm.user_id=?)) ORDER BY created_at DESC",orgId,user(a)); }
+    @PostMapping("/orgs/{orgId}/files") public Map<String,Object> createFile(@PathVariable UUID orgId,@Valid @RequestBody CreateFile r,org.springframework.security.core.Authentication a) { UUID uid=user(a); member(orgId,a); team(orgId,r.teamId(),uid); UUID id=UUID.randomUUID(); String key=Objects.requireNonNullElse(r.objectKey(),orgId+"/"+id+"/"+r.name()); db.update("INSERT INTO nexus_storage.files(id,organization_id,team_id,name,object_key,mime_type,size_bytes,created_by) VALUES(?,?,?,?,?,?,?,?)",id,orgId,r.teamId(),r.name().trim(),key,Objects.requireNonNullElse(r.mimeType(),"application/octet-stream"),Objects.requireNonNullElse(r.sizeBytes(),0L),uid); audit(orgId,uid,"file.created","file",id); return db.queryForMap("SELECT id,name,object_key,mime_type,size_bytes,created_at,team_id FROM nexus_storage.files WHERE id=?",id); }
     @DeleteMapping("/files/{id}") public void deleteFile(@PathVariable UUID id,org.springframework.security.core.Authentication a){Map<String,Object> f=db.queryForMap("SELECT organization_id FROM nexus_storage.files WHERE id=? AND deleted_at IS NULL",id);member((UUID)f.get("organization_id"),a);db.update("UPDATE nexus_storage.files SET deleted_at=now() WHERE id=?",id);audit((UUID)f.get("organization_id"),user(a),"file.deleted","file",id);}
 
     @GetMapping("/orgs/{orgId}/invitations") public List<Map<String,Object>> invitations(@PathVariable UUID orgId,org.springframework.security.core.Authentication a){member(orgId,a);return db.queryForList("SELECT id,email,role,status,created_at,expires_at FROM org.invitations WHERE organization_id=? ORDER BY created_at DESC",orgId);}
@@ -82,5 +87,6 @@ public class WorkspaceController {
     private boolean flag(Map<String,Object> body,String key){return !Boolean.FALSE.equals(body.get(key));}
     private void member(UUID org,org.springframework.security.core.Authentication a){organizations.requireMember(org,user(a));}
     private void admin(UUID org,UUID uid){organizations.requireMember(org,uid);String role=db.queryForObject("SELECT role FROM org.memberships WHERE organization_id=? AND user_id=?",String.class,org,uid);if(!Set.of("OWNER","ADMIN").contains(role))throw new SecurityException("Administrator access is required.");}
+    private void team(UUID org,UUID team,UUID uid){if(team!=null&&db.queryForObject("SELECT count(*) FROM org.teams t JOIN org.team_members tm ON tm.team_id=t.id WHERE t.id=? AND t.organization_id=? AND t.deleted_at IS NULL AND tm.user_id=?",Integer.class,team,org,uid)==0)throw new SecurityException("You do not have access to this team.");}
     private void audit(UUID org,UUID actor,String action,String type,UUID id){db.update("INSERT INTO audit.events(id,organization_id,actor_id,action,entity_type,entity_id) VALUES(?,?,?,?,?,?)",UUID.randomUUID(),org,actor,action,type,id);}
 }

@@ -12,29 +12,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  redis:
-    image: redis:7-alpine
-    ports: ["16379:6379"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
   backend:
     build: ../backend
     environment:
       DATABASE_URL: jdbc:postgresql://postgres:5432/nexus
       DATABASE_USERNAME: nexus
       DATABASE_PASSWORD: nexus
-      REDIS_HOST: redis
-      REDIS_URL: redis://redis:6379
       CLERK_JWT_ISSUER: ${CLERK_JWT_ISSUER:-https://uncommon-tadpole-96.clerk.accounts.dev}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-local-development-to-a-long-secret-key}
       LIVEKIT_URL: ${LIVEKIT_URL:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
     ports: ["8080:8080"]
     depends_on:
       postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
   frontend:
     build: ../frontend
     environment:

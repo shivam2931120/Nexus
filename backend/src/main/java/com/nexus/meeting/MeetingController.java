@@ -1,13 +1,14 @@
 package com.nexus.meeting;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import com.nexus.org.OrganizationController;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -22,14 +23,20 @@ public class MeetingController {
     private final String livekitUrl;
     private final String apiKey;
     private final String apiSecret;
+    private final JdbcTemplate db;
+    private final OrganizationController organizations;
 
     public MeetingController(
             @Value("${livekit.url:}") String livekitUrl,
             @Value("${livekit.api-key:}") String apiKey,
-            @Value("${livekit.api-secret:}") String apiSecret) {
+            @Value("${livekit.api-secret:}") String apiSecret,
+            JdbcTemplate db,
+            OrganizationController organizations) {
         this.livekitUrl = livekitUrl;
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
+        this.db = db;
+        this.organizations = organizations;
     }
 
     public record TokenResponse(String serverUrl, String token, String room, String identity) {}
@@ -47,6 +54,13 @@ public class MeetingController {
         if (!normalizedRoom.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid meeting room name.");
         }
+        Map<String,Object> meeting;
+        try {
+            meeting = db.queryForMap("SELECT organization_id FROM meeting.meetings WHERE room_name=? AND deleted_at IS NULL", normalizedRoom);
+        } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This meeting does not exist or has ended.");
+        }
+        organizations.requireMember((UUID) meeting.get("organization_id"), UUID.fromString(authentication.getName()));
         String participant = identity == null || identity.isBlank()
                 ? authentication.getName()
                 : identity.trim();
@@ -71,7 +85,7 @@ public class MeetingController {
                 .expiration(Date.from(now.plusSeconds(600)))
                 .claim("video", videoGrant);
         if (name != null && !name.isBlank()) builder.claim("name", name.trim());
-        return new TokenResponse(websocketUrl(livekitUrl), builder.signWith(key, SignatureAlgorithm.HS256).compact(), normalizedRoom, participant);
+        return new TokenResponse(websocketUrl(livekitUrl), builder.signWith(key).compact(), normalizedRoom, participant);
     }
 
     private static String websocketUrl(String value) {

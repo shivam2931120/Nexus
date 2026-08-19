@@ -10,7 +10,7 @@ One PostgreSQL instance owns a schema per bounded context. Organization IDs are 
 
 ## Real time
 
-REST persists chat messages. STOMP/WebSocket is the delivery boundary; Redis provides presence/cross-node support and PostgreSQL LISTEN/NOTIFY is reserved for asynchronous events. A production deployment must add WebSocket-level membership authorization before allowing arbitrary topic subscriptions.
+REST persists chat messages and STOMP/WebSocket is the live delivery boundary. PostgreSQL remains the source of truth. A future multi-node deployment can add a managed broker without coupling the current application to a specific cache product.
 
 ## Deferred work
 
