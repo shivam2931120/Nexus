@@ -21,6 +21,8 @@ services:
         value: nexus
       - key: CLERK_JWT_ISSUER
         sync: false
+      - key: CLERK_JWT_PUBLIC_KEY
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY
@@ -34,7 +36,7 @@ services:
       - key: GOOGLE_REDIRECT_URI
         sync: false
       - key: FRONTEND_ORIGIN
-        value: https://nexus-nine-drab-77.vercel.app
+        value: https://nexus.justshivamm.in
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
