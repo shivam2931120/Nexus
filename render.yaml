@@ -21,8 +21,6 @@ services:
         value: nexus
       - key: CLERK_JWT_ISSUER
         sync: false
-      - key: CLERK_JWT_PUBLIC_KEY
-        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY
