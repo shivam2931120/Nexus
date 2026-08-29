@@ -111,7 +111,7 @@ class ClerkJwtFilter extends OncePerRequestFilter {
                     UUID userId = identities.resolve(token.getSubject(), email(token), displayName(token));
                     JwtFilter.authenticate(userId);
                 } catch (Exception exception) {
-                    log.warn("Clerk authentication failed for {} {}: {}", request.getMethod(), request.getRequestURI(), exception.getClass().getSimpleName());
+                    log.warn("Clerk authentication failed for {} {}: {} - {}", request.getMethod(), request.getRequestURI(), exception.getClass().getSimpleName(), exception.getMessage());
                 }
             }
         }

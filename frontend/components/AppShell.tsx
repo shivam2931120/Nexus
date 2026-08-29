@@ -22,7 +22,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const key = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true) } }
     const apiError = (event: Event) => setServerError((event as CustomEvent<{ message?: string }>).detail?.message ?? 'The server could not complete the request.')
     const themeChanged = (event: Event) => setDark(Boolean((event as CustomEvent<{ dark?: boolean }>).detail?.dark))
-    const authExpired = () => void signOut().then(() => router.replace(`/login?redirect_url=${encodeURIComponent(path)}&reason=session`))
+    let handlingExpiredSession = false
+    const authExpired = () => {
+      if (handlingExpiredSession) return
+      handlingExpiredSession = true
+      void signOut().catch(() => undefined).finally(() => {
+        router.replace(`/login?redirect_url=${encodeURIComponent(path)}&reason=session`)
+      })
+    }
     window.addEventListener('keydown', key); window.addEventListener('nexus:api-error', apiError); window.addEventListener('nexus:auth-expired', authExpired); window.addEventListener('nexus:theme', themeChanged)
     return () => { window.removeEventListener('keydown', key); window.removeEventListener('nexus:api-error', apiError); window.removeEventListener('nexus:auth-expired', authExpired); window.removeEventListener('nexus:theme', themeChanged) }
   }, [path, router, signOut, user])
