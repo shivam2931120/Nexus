@@ -16,7 +16,7 @@ export default function ClerkTokenBridge() {
       return
     }
     registerTokenProvider(getToken)
-    const sync = () => void getToken().then((token) => {
+    const sync = () => void getToken({ skipCache: true }).then((token) => {
       const displayName = user?.fullName ?? user?.firstName ?? 'Nexus user'
       if (user) {
         localStorage.setItem('nexus_name', displayName)

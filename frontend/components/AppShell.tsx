@@ -39,7 +39,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (!searchOpen || q.trim().length < 2 || !ws || !isSignedIn) { setResults([]); return }; const timer = setTimeout(() => void getToken().then(token => token ? api<{tasks:Result[];documents:Result[];messages:Result[]}>(`/search?q=${encodeURIComponent(q)}&orgId=${ws.organization.id}`, { token }) : null).then(data => data && setResults([...data.tasks, ...data.documents, ...data.messages])).catch(() => setResults([])), 250); return () => clearTimeout(timer) }, [getToken, isSignedIn, q, searchOpen, ws])
 
   const toggle = () => { const next = !dark; setDark(next); localStorage.setItem('nexus_theme', next ? 'dark' : 'light'); document.documentElement.dataset.theme = next ? 'dark' : 'light'; window.dispatchEvent(new CustomEvent('nexus:theme', { detail: { dark: next } })) }
-  const nav = (items: readonly (readonly [string, string, typeof Home])[]) => items.map(([href, label, Icon]) => <Link key={href} href={href} className={`nav-item ${path === href ? 'active' : ''}`}><Icon size={17} /><span>{label}</span></Link>)
+  const nav = (items: readonly (readonly [string, string, typeof Home])[]) => items.map(([href, label, Icon]) => <Link key={href} href={href} onClick={() => setMobileNavOpen(false)} className={`nav-item ${path === href ? 'active' : ''}`}><Icon size={17} /><span>{label}</span></Link>)
   const logout = async () => { localStorage.removeItem('nexus_name'); localStorage.removeItem('nexus_org_id'); localStorage.removeItem('nexus_team_id'); await signOut(); router.push('/login') }
 
   if (!isLoaded || !isSignedIn) return <main className="auth-loading" aria-live="polite">Loading secure workspace…</main>

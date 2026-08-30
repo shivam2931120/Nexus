@@ -382,7 +382,8 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   .top-actions .icon-button:first-child { display: none; }
   .sidebar { position: fixed; top: var(--topbar-height); left: 0; bottom: 0; z-index: 40; width: min(310px, 86vw); height: auto; display: block; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 18px 0 42px rgba(0, 0, 0, .18); }
   .shell.mobile-nav-open .sidebar { transform: translateX(0); }
-  .shell.mobile-nav-open::after { content: ''; position: fixed; inset: var(--topbar-height) 0 0; z-index: 35; background: rgba(8, 16, 24, .48); }
+  .shell.mobile-nav-open::after { content: ''; position: fixed; inset: var(--topbar-height) 0 0; z-index: 35; background: rgba(8, 16, 24, .48); cursor: pointer; }
+  .shell.mobile-nav-open .sidebar { z-index: 45; }
   .sidebar .nav-section, .sidebar .nav-item span { display: block; }
   .sidebar .nav-item { justify-content: flex-start; padding: 8px 12px; }
   .main { min-height: calc(100vh - var(--topbar-height)); }

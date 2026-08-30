@@ -6,18 +6,19 @@ export class ApiRequestError extends Error {
     this.name = 'ApiRequestError'
   }
 }
-type ClerkWindow = Window & { Clerk?: { session?: { getToken: () => Promise<string | null> } } }
-type TokenProvider = () => Promise<string | null>
+type TokenOptions = { skipCache?: boolean }
+type ClerkWindow = Window & { Clerk?: { session?: { getToken: (options?: TokenOptions) => Promise<string | null> } } }
+type TokenProvider = (options?: TokenOptions) => Promise<string | null>
 let tokenProvider: TokenProvider | null = null
 
 export function registerTokenProvider(provider: TokenProvider | null) {
   tokenProvider = provider
 }
 
-export async function getAuthToken(explicit?: string) {
+export async function getAuthToken(explicit?: string, options?: TokenOptions) {
   if (explicit) return explicit
-  if (tokenProvider) return tokenProvider()
-  if (typeof window !== 'undefined') return (window as ClerkWindow).Clerk?.session?.getToken() ?? null
+  if (tokenProvider) return tokenProvider(options)
+  if (typeof window !== 'undefined') return (window as ClerkWindow).Clerk?.session?.getToken(options) ?? null
   return null
 }
 
@@ -38,8 +39,8 @@ export async function api<T>(path:string, options:ApiOptions={}):Promise<T>{
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('nexus:api-error', { detail: { message: 'The server could not be reached. Check your connection and retry.', path } }))
     throw error
   }
-  if ((res.status === 401 || res.status === 403) && typeof window !== 'undefined' && !options.token) {
-    const freshToken = await getAuthToken()
+  if (res.status === 401 && typeof window !== 'undefined') {
+    const freshToken = await getAuthToken(undefined, { skipCache: true })
     if (freshToken && freshToken !== token) {
       headers.set('Authorization', `Bearer ${freshToken}`)
       res = await fetch(`${API}${path}`,{...options,headers})
