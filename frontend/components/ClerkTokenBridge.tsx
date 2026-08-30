@@ -1,14 +1,23 @@
 'use client'
 
 import { useAuth, useUser } from '@clerk/nextjs'
+import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import { api, registerTokenProvider } from '../lib/api'
 
 export default function ClerkTokenBridge() {
   const { isLoaded, isSignedIn, getToken } = useAuth()
   const { user } = useUser()
+  const pathname = usePathname()
 
   useEffect(() => {
+    // Auth pages must be able to recover an expired Clerk session without
+    // starting workspace requests or attempting a profile sync in the
+    // background. Those requests otherwise create a 401 loop on /login.
+    if (pathname === '/login' || pathname === '/login/sso-callback') {
+      registerTokenProvider(null)
+      return () => registerTokenProvider(null)
+    }
     if (!isLoaded) return
     if (!isSignedIn) {
       localStorage.removeItem('nexus_name')
@@ -25,7 +34,7 @@ export default function ClerkTokenBridge() {
     })
     sync()
     return () => registerTokenProvider(null)
-  }, [getToken, isLoaded, isSignedIn, user])
+  }, [getToken, isLoaded, isSignedIn, pathname, user])
 
   return null
 }

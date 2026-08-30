@@ -13,7 +13,13 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'signIn'|'signUp'>('signIn')
   useEffect(() => { if (new URLSearchParams(window.location.search).get('signup') === 'true') setMode('signUp') }, [])
   const destination = () => { const value = new URLSearchParams(window.location.search).get('redirect_url'); return value?.startsWith('/') && !value.startsWith('//') ? value : '/' }
-  useEffect(() => { if (authLoaded && isSignedIn) router.replace(destination()) }, [authLoaded, isSignedIn, router])
+  useEffect(() => {
+    // A protected API request sends users here with reason=session after an
+    // expired Clerk session. Do not immediately redirect back to the app
+    // while Clerk is still reporting the stale browser session as signed in.
+    const params = new URLSearchParams(window.location.search)
+    if (authLoaded && isSignedIn && params.get('reason') !== 'session') router.replace(destination())
+  }, [authLoaded, isSignedIn, router])
   const [verification, setVerification] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
