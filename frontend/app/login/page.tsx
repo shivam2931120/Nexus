@@ -55,7 +55,20 @@ export default function LoginPage() {
 
   const google = async () => {
     setError('')
-    try { if (mode === 'signIn') await signIn?.authenticateWithRedirect({ strategy: 'oauth_google', redirectUrl: '/login/sso-callback', redirectUrlComplete: '/' }); else await signUp?.authenticateWithRedirect({ strategy: 'oauth_google', redirectUrl: '/login/sso-callback', redirectUrlComplete: '/' }) }
+    try {
+      // Keep OAuth in a small popup so the custom Nexus form is not replaced
+      // by Clerk's hosted /sign-in or /sign-up page. The callback still uses
+      // the active origin for local and production environments.
+      const origin = window.location.origin
+      const redirectUrl = `${origin}/login/sso-callback`
+      const redirectUrlComplete = `${origin}${destination()}`
+      const popup = window.open('', 'nexus-google-auth', 'popup,width=520,height=720')
+      if (!popup) throw new Error('Please allow popups to continue with Google.')
+      const params = { strategy: 'oauth_google' as const, redirectUrl, redirectUrlComplete, popup }
+      if (mode === 'signIn') await signIn?.authenticateWithPopup(params)
+      else await signUp?.authenticateWithPopup(params)
+      router.replace(destination())
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Google sign-in is unavailable.') }
   }
 
