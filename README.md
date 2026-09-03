@@ -15,7 +15,7 @@ Implemented:
 - Next.js 15 responsive shell with Nexus design tokens, dark mode, dashboard, chat, Kanban tasks, documents, projects, settings, and login/signup
 - Docker Compose, Dockerfiles, GitHub Actions, OpenAPI endpoint support, Actuator health/metrics
 
-Deferred and intentionally documented rather than faked: production email delivery, provider OAuth credentials, refresh-token persistence/rotation, R2 production adapter, LiveKit meetings, full CRDT collaboration, advanced calendar/files/analytics/AI/billing/whiteboard flows, and enterprise deployment.
+The implemented suite includes permission-scoped workspace search, NexusAI context retrieval, team chat workflows, Supabase Storage uploads and signed sharing, form publishing/anonymous submissions/approvals/analytics/CSV export, calendar recurrence/reminders/resources/availability, project health/milestones/risks/templates, directory profiles, notifications, analytics, meetings, documents, and persisted whiteboards. Provider-backed capabilities still require their own production credentials; the Integrations page exposes safe readiness diagnostics for the current organization.
 
 Editorial integration architecture and verification are documented in [`docs/EDITORIAL_INTEGRATION.md`](docs/EDITORIAL_INTEGRATION.md). Nexus does not depend on the standalone Editorial service at runtime; both applications remain independently deployable.
 
@@ -37,7 +37,7 @@ cd backend && mvn spring-boot:run
 cd frontend && npm install && npm run dev
 ```
 
-Register an account at `/login`, create an organization with `POST /api/orgs`, then create a team with `POST /api/orgs/{orgId}/teams`. The frontend currently uses representative local UI states for screens whose production service is still deferred; those boundaries are listed above.
+Register an account at `/login`, create an organization with `POST /api/orgs`, then create a team with `POST /api/orgs/{orgId}/teams`. Select Integrations from the workspace and run diagnostics before testing provider-backed flows. Unsupported provider capabilities are reported as unavailable instead of being presented as successful.
 
 ## Validation
 

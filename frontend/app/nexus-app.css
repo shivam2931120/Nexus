@@ -39,6 +39,8 @@
 .nexus-file-inspector dl div { min-width: 0; display: grid; gap: 7px; }
 .nexus-file-inspector dt { color: var(--muted); font: 500 10px 'IBM Plex Mono', monospace; letter-spacing: .14em; }
 .nexus-file-inspector dd { margin: 0; overflow-wrap: anywhere; font: 400 12px 'IBM Plex Mono', monospace; }
+.file-history { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border); }
+.file-history h3 { margin-bottom: 4px; }
 
 .calendar-card { overflow: auto; padding: 0; }
 .calendar-grid { min-width: 680px; }
@@ -51,6 +53,10 @@
 .calendar-event { width: 100%; display: block; overflow: hidden; padding: 5px 6px; border: 0; background: var(--brand-soft); color: var(--text); text-align: left; text-overflow: ellipsis; white-space: nowrap; font: 400 11px 'IBM Plex Mono', monospace; }
 .calendar-week { min-width: 840px; display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); border-left: 1px solid var(--border); }
 .calendar-week-column { min-height: 360px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.availability-panel { margin-bottom: 16px; }
+.availability-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--border); }
+.availability-panel { margin-bottom: 16px; }
+.availability-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--border); }
 
 .meeting-hero { display: flex; align-items: flex-start; gap: 15px; padding: 18px; border: 1px solid var(--border); border-left: 3px solid var(--brand); background: var(--brand-soft); }
 .meeting-hero h2 { margin-bottom: 7px; }
@@ -128,6 +134,8 @@
   .meeting-room-page { padding: 14px; }
   .meeting-room-header { align-items: flex-start; }
   .meeting-sidebar { grid-template-columns: 1fr; }
+  .availability-list { grid-template-columns: 1fr; }
+  .availability-list { grid-template-columns: 1fr; }
   .livekit-stage { grid-template-columns: 1fr; }
   .onboarding-steps { display: grid; grid-template-columns: 1fr; }
   .nexus-error-page { padding: 18px; }

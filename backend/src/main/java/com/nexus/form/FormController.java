@@ -131,9 +131,7 @@ public class FormController {
         db.update("INSERT INTO nexus_form.submissions(id,form_id,organization_id,submitted_by,responses,status) VALUES(?,?,?,?,?::jsonb,?)",
                 submissionId, id, orgId, uid, write(responses), status);
         if ("PENDING".equals(status)) {
-            List<UUID> reviewers = db.query("SELECT user_id FROM org.memberships WHERE organization_id=? AND role IN ('OWNER','ADMIN')", (rs, row) -> rs.getObject("user_id", UUID.class), orgId);
-            for (UUID reviewer : reviewers) db.update("INSERT INTO notification.notifications(id,organization_id,user_id,type,title,body) VALUES(?,?,?,?,?,?)",
-                    UUID.randomUUID(), orgId, reviewer, "FORM_APPROVAL", "Form approval requested", "A new response to " + form.get("title") + " needs review.");
+            notifyApprovers(orgId, Objects.toString(form.get("title"), "Form response"), form.get("approval_route"));
         }
         audit(orgId, uid, "form.submitted", "form_submission", submissionId);
         return submission(submissionId, uid, isAdmin(orgId, uid));
@@ -263,6 +261,24 @@ public class FormController {
     private void applyCalculations(List<Map<String,Object>> fields,Map<String,Object> responses){for(Map<String,Object> field:fields){if(!"CALCULATED".equals(field.get("type")))continue;String formula=Objects.toString(field.get("formula"),"").replaceAll("[^A-Za-z0-9_+\\-*/(). ]","");double total=0;boolean first=true;for(String part:formula.split("\\+")){double value;try{value=Double.parseDouble(part.trim());}catch(Exception ignored){Object raw=responses.get(part.trim());try{value=Double.parseDouble(Objects.toString(raw,"0"));}catch(Exception e){value=0;}}total=first?value:total+value;first=false;}responses.put(String.valueOf(field.get("id")),total);}}
 
     private List<Map<String, Object>> fields(Map<String, Object> form) { return readList(String.valueOf(form.get("fields_json"))); }
+    private void notifyApprovers(UUID orgId, String formTitle, Object routeValue) {
+        Set<UUID> reviewers = new LinkedHashSet<>();
+        List<Map<String, Object>> route = readList(routeValue == null ? "[]" : String.valueOf(routeValue));
+        for (Map<String, Object> step : route) {
+            Object userId = step.get("userId");
+            if (userId != null) {
+                try {
+                    UUID candidate = UUID.fromString(String.valueOf(userId));
+                    if (db.queryForObject("SELECT count(*) FROM org.memberships WHERE organization_id=? AND user_id=?", Integer.class, orgId, candidate) > 0) reviewers.add(candidate);
+                } catch (IllegalArgumentException ignored) { }
+            }
+            String role = Objects.toString(step.get("role"), "").trim().toUpperCase(Locale.ROOT);
+            if (!role.isBlank()) reviewers.addAll(db.query("SELECT user_id FROM org.memberships WHERE organization_id=? AND role=?", (rs, row) -> rs.getObject("user_id", UUID.class), orgId, role));
+        }
+        if (reviewers.isEmpty()) reviewers.addAll(db.query("SELECT user_id FROM org.memberships WHERE organization_id=? AND role IN ('OWNER','ADMIN')", (rs, row) -> rs.getObject("user_id", UUID.class), orgId));
+        for (UUID reviewer : reviewers) db.update("INSERT INTO notification.notifications(id,organization_id,user_id,type,title,body) VALUES(?,?,?,?,?,?)",
+                UUID.randomUUID(), orgId, reviewer, "FORM_APPROVAL", "Form approval requested", "A new response to " + formTitle + " needs review.");
+    }
     private List<Map<String, Object>> readList(String value) { try { return json.readValue(value, new TypeReference<>() {}); } catch (JsonProcessingException e) { throw new IllegalStateException("Stored form fields are invalid.", e); } }
     private Map<String, Object> readMap(String value) { try { return json.readValue(value, new TypeReference<>() {}); } catch (JsonProcessingException e) { throw new IllegalStateException("Stored form responses are invalid.", e); } }
     private String write(Object value) { try { return json.writeValueAsString(value); } catch (JsonProcessingException e) { throw new IllegalArgumentException("Form data could not be encoded."); } }

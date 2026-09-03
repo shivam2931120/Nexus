@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "../../components/AppShell";
 import {
+  BarChart3,
   CheckCircle2,
   FileText,
   ListChecks,
@@ -68,6 +69,11 @@ type Submission = {
   can_review: boolean;
 };
 type Tab = "forms" | "mine" | "review";
+type FormAnalytics = {
+  total: number;
+  byStatus: Array<{ status: string; total: number }>;
+  daily: Array<{ day: string; total: number }>;
+};
 
 const categories = [
   "LEAVE",
@@ -225,6 +231,9 @@ export default function FormsPage() {
   const [newCategory, setNewCategory] = useState("LEAVE");
   const [reviewing, setReviewing] = useState<Submission | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [analyticsForm, setAnalyticsForm] = useState<NexusForm | null>(null);
+  const [analytics, setAnalytics] = useState<FormAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const load = async () => {
     if (!orgId) return;
@@ -427,6 +436,19 @@ export default function FormsPage() {
       setBusy(false);
     }
   };
+  const openAnalytics = async (form: NexusForm) => {
+    setAnalyticsForm(form);
+    setAnalytics(null);
+    setAnalyticsLoading(true);
+    try {
+      setAnalytics(await api<FormAnalytics>(`/forms/${form.id}/analytics`));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Form analytics could not be loaded.");
+      setAnalyticsForm(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -572,12 +594,10 @@ export default function FormsPage() {
                         </button>
                       )}
                       {form.can_manage && (
-                        <button
-                          className="button"
-                          onClick={() => setDraft(form)}
-                        >
-                          Manage
-                        </button>
+                        <>
+                          <button className="button" onClick={() => setDraft(form)}>Manage</button>
+                          <button className="button" onClick={() => void openAnalytics(form)}><BarChart3 size={14}/> Analytics</button>
+                        </>
                       )}
                     </div>
                   </article>
@@ -691,6 +711,14 @@ export default function FormsPage() {
             onClose={() => setReviewing(null)}
           />
         )}
+        {analyticsForm && (
+          <FormAnalyticsModal
+            form={analyticsForm}
+            data={analytics}
+            loading={analyticsLoading}
+            onClose={() => setAnalyticsForm(null)}
+          />
+        )}
       </div>
     </AppShell>
   );
@@ -713,6 +741,7 @@ function Designer({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const [designerError, setDesignerError] = useState("");
   const updateField = (index: number, change: Partial<FormField>) =>
     setForm({
       ...form,
@@ -721,37 +750,37 @@ function Designer({
       ),
     });
   const toggleAnonymous = async () => {
-    const updated = await api<{
-      anonymous_enabled: boolean;
-      public_slug?: string;
-    }>(`/forms/${form.id}/advanced`, {
-      method: "PUT",
-      body: JSON.stringify({
-        anonymousEnabled: !form.anonymous_enabled,
-        approvalRoute: form.approval_required
-          ? [{ step: 1, role: "ADMIN" }]
-          : [],
-      }),
-    });
-    setForm({ ...form, ...updated });
-    if (updated.public_slug)
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/public/forms/${updated.public_slug}`,
-      );
+    setDesignerError("");
+    try {
+      const updated = await api<{
+        anonymous_enabled: boolean;
+        public_slug?: string;
+      }>(`/forms/${form.id}/advanced`, {
+        method: "PUT",
+        body: JSON.stringify({
+          anonymousEnabled: !form.anonymous_enabled,
+          approvalRoute: form.approval_required
+            ? [{ step: 1, role: "ADMIN" }]
+            : [],
+        }),
+      });
+      setForm({ ...form, ...updated });
+      if (updated.public_slug) await navigator.clipboard.writeText(`${window.location.origin}/public/forms/${updated.public_slug}`);
+    } catch (reason) {
+      setDesignerError(reason instanceof Error ? reason.message : "The anonymous form link could not be changed.");
+    }
   };
   const exportCsv = async () => {
-    const token = await getAuthToken();
-    const response = await fetch(`${API}/forms/${form.id}/export`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) throw new Error("Responses could not be exported.");
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${form.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-responses.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    setDesignerError("");
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API}/forms/${form.id}/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Responses could not be exported.");
+      const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement("a");
+      link.href = url; link.download = `${form.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-responses.csv`; link.click(); URL.revokeObjectURL(url);
+    } catch (reason) {
+      setDesignerError(reason instanceof Error ? reason.message : "Responses could not be exported.");
+    }
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -772,6 +801,7 @@ function Designer({
             <X size={16} />
           </button>
         </div>
+        {designerError && <div className="form-error">{designerError}</div>}
         <div className="forms-designer-grid">
           <section>
             <div className="field">
@@ -1227,6 +1257,37 @@ function ReviewModal({
             <CheckCircle2 size={15} /> Approve
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function FormAnalyticsModal({
+  form,
+  data,
+  loading,
+  onClose,
+}: {
+  form: NexusForm;
+  data: FormAnalytics | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const peak = Math.max(...(data?.daily.map((item) => item.total) ?? [1]), 1);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="card modal-card form-analytics-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="card-header">
+          <div><div className="eyebrow">FORM INSIGHTS</div><h2>{form.title}</h2><p className="muted">Submission activity and workflow outcomes.</p></div>
+          <button className="icon-button" aria-label="Close analytics" onClick={onClose}><X size={16}/></button>
+        </div>
+        {loading ? <div className="empty">Loading analytics…</div> : data ? <>
+          <div className="metric-grid form-analytics-metrics">
+            <div className="card metric-card"><BarChart3 size={17} color="var(--brand)"/><span className="muted">Total responses</span><strong>{data.total}</strong></div>
+            {data.byStatus.slice(0, 3).map((item) => <div className="card metric-card" key={item.status}><span className="muted">{titleCase(item.status)}</span><strong>{item.total}</strong></div>)}
+          </div>
+          <section className="form-analytics-chart"><div className="card-header"><h3>Responses by day</h3><small className="muted">Recent submission history</small></div>{data.daily.length === 0 ? <div className="empty">No responses yet.</div> : <div className="bar-chart">{data.daily.slice(-14).map((item) => <div className="bar-column" key={item.day} title={`${item.total} responses`}><i style={{height: `${Math.max(8, (item.total / peak) * 100)}%`}}/><small>{new Date(item.day).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}</small></div>)}</div>}</section>
+        </> : <div className="empty">Analytics are unavailable for this form.</div>}
       </div>
     </div>
   );
