@@ -1,0 +1,5 @@
+'use client'
+import { useEffect,useState } from 'react'
+import { useParams } from 'next/navigation'
+import { API } from '../../../../lib/api'
+export default function SharedFile(){const{token}=useParams<{token:string}>();const[file,setFile]=useState<{name:string;mimeType:string;sizeBytes:number;url:string}|null>(null);const[error,setError]=useState('');useEffect(()=>{void fetch(`${API}/public/shared-files/${encodeURIComponent(token)}`).then(async response=>{if(!response.ok)throw new Error('This shared link is unavailable or expired.');return response.json()}).then(setFile).catch(reason=>setError(reason instanceof Error?reason.message:'Shared file unavailable.'))},[token]);return <main className="auth-page"><section className="card auth-card"><div className="eyebrow">NEXUS / SHARED FILE</div><h1>{file?.name||'Shared file'}</h1>{error?<div className="form-error">{error}</div>:file?<><p className="muted">{file.mimeType} · {Math.ceil(file.sizeBytes/1024)} KB</p><a className="button primary" href={file.url}>Download file</a></>:<p className="muted">Preparing secure download…</p>}</section></main>}

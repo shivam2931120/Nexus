@@ -42,7 +42,7 @@ public class CompletionController {
     record ProfileRequest(String title, String department, String bio, List<String> skills, String location, String availability, UUID managerId, String avatarUrl) {}
     record BoardRequest(@NotBlank String name, Map<String,Object> data, UUID teamId) {}
     record BoardUpdate(Map<String,Object> data, @NotBlank String name) {}
-    record AiRequest(@NotBlank String message, String context) {}
+    record AiRequest(@NotBlank String message, String context, UUID orgId) { AiRequest(String message,String context){this(message,context,null);} }
     record TeamMemberRequest(UUID userId) {}
 
     @GetMapping("/orgs/{orgId}/dashboard")
@@ -125,9 +125,12 @@ public class CompletionController {
 
     @PostMapping(value="/ai/chat", consumes=MediaType.APPLICATION_JSON_VALUE)
     public Map<String,Object> ai(@Valid @RequestBody AiRequest request, org.springframework.security.core.Authentication a) {
-        user(a);
+        UUID uid=user(a); UUID orgId=request.orgId();
+        if(orgId==null) orgId=db.queryForObject("SELECT organization_id FROM org.memberships WHERE user_id=? ORDER BY created_at LIMIT 1",UUID.class,uid);
+        member(orgId,a);
         if (nemotronKey.isBlank()) return Map.of("configured", false, "answer", "NexusAI is not configured on the backend yet. Add the server-side AI provider key and retry.");
-        Map<String,Object> body=Map.of("model",nemotronModel,"messages",List.of(Map.of("role","system","content","You are NexusAI, a concise enterprise workspace assistant. Use the supplied workspace context, never invent records, and clearly say when data is missing."),Map.of("role","user","content",request.message()+"\n\nWorkspace context:\n"+Objects.toString(request.context(),"No additional context."))),"temperature",0.2,"max_tokens",1200);
+        String safeContext="Tasks: "+db.queryForList("SELECT title,status,priority,due_date FROM project.tasks t WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS(SELECT 1 FROM org.team_members tm WHERE tm.team_id=t.team_id AND tm.user_id=?)) ORDER BY updated_at DESC LIMIT 30",orgId,uid)+"\nDocuments: "+db.queryForList("SELECT title,updated_at FROM document.documents d WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS(SELECT 1 FROM org.team_members tm WHERE tm.team_id=d.team_id AND tm.user_id=?)) ORDER BY updated_at DESC LIMIT 20",orgId,uid)+"\nEvents: "+db.queryForList("SELECT title,starts_at,ends_at FROM calendar.events e WHERE organization_id=? AND deleted_at IS NULL AND (team_id IS NULL OR EXISTS(SELECT 1 FROM org.team_members tm WHERE tm.team_id=e.team_id AND tm.user_id=?)) ORDER BY starts_at LIMIT 20",orgId,uid)+"\nRecent messages: "+db.queryForList("SELECT c.name channel,m.content,u.name sender FROM chat.messages m JOIN chat.channels c ON c.id=m.channel_id JOIN nexus_auth.users u ON u.id=m.sender_id WHERE m.organization_id=? AND m.deleted_at IS NULL AND m.status='SENT' AND (c.team_id IS NULL OR EXISTS(SELECT 1 FROM org.team_members tm WHERE tm.team_id=c.team_id AND tm.user_id=?)) AND (c.type<>'PRIVATE' OR EXISTS(SELECT 1 FROM chat.channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=?)) ORDER BY m.created_at DESC LIMIT 30",orgId,uid,uid);
+        Map<String,Object> body=Map.of("model",nemotronModel,"messages",List.of(Map.of("role","system","content","You are NexusAI, a concise enterprise workspace assistant. Use only the permission-filtered workspace context supplied by the server, never invent records, and clearly say when data is missing."),Map.of("role","user","content",request.message()+"\n\nPermission-filtered workspace context:\n"+safeContext)),"temperature",0.2,"max_tokens",1200);
         Map<?,?> response;
         try {
             response=RestClient.create().post().uri(nemotronUrl).header("Authorization","Bearer "+nemotronKey).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(Map.class);

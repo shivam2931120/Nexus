@@ -20,7 +20,7 @@ import java.util.*;
 @RequestMapping("/api")
 public class FormController {
     private static final Set<String> CATEGORIES = Set.of("LEAVE", "APPROVAL", "ONBOARDING", "SURVEY", "INCIDENT", "EQUIPMENT", "OTHER");
-    private static final Set<String> FIELD_TYPES = Set.of("TEXT", "TEXTAREA", "NUMBER", "DATE", "SELECT", "RADIO", "CHECKBOX", "EMAIL");
+    private static final Set<String> FIELD_TYPES = Set.of("TEXT", "TEXTAREA", "NUMBER", "DATE", "SELECT", "RADIO", "CHECKBOX", "EMAIL", "CALCULATED");
     private static final Set<String> FORM_STATUSES = Set.of("DRAFT", "PUBLISHED", "CLOSED");
     private final JdbcTemplate db;
     private final OrganizationController organizations;
@@ -32,7 +32,7 @@ public class FormController {
         this.json = json;
     }
 
-    public record FieldDefinition(String id, String label, String type, Boolean required, List<String> options, String placeholder) {}
+    public record FieldDefinition(String id, String label, String type, Boolean required, List<String> options, String placeholder, String conditionField, String conditionEquals, String formula) { public FieldDefinition(String id,String label,String type,Boolean required,List<String> options,String placeholder){this(id,label,type,required,options,placeholder,null,null,null);} }
     public record FormRequest(@NotBlank String title, String description, String category, Boolean approvalRequired, UUID teamId, List<FieldDefinition> fields) {}
     public record StatusRequest(@NotBlank String status) {}
     public record SubmissionRequest(Map<String, Object> responses) {}
@@ -123,8 +123,8 @@ public class FormController {
         Map<String, Object> form = formAccess(id, authentication);
         if (!"PUBLISHED".equals(form.get("status"))) throw new IllegalArgumentException("This form is not accepting responses.");
         UUID uid = user(authentication);
-        Map<String, Object> responses = request.responses() == null ? Map.of() : request.responses();
-        validateResponses(fields(form), responses);
+        Map<String, Object> responses = request.responses() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(request.responses());
+        applyCalculations(fields(form), responses); validateResponses(fields(form), responses);
         UUID submissionId = UUID.randomUUID();
         UUID orgId = (UUID) form.get("organization_id");
         String status = Boolean.TRUE.equals(form.get("approval_required")) ? "PENDING" : "SUBMITTED";
@@ -146,10 +146,10 @@ public class FormController {
         boolean manager = isAdmin(orgId, uid);
         String sql = """
                 SELECT s.*, s.responses::text responses_json, f.title form_title, f.category, f.approval_required,
-                       u.name submitter_name, u.email submitter_email, reviewer.name reviewer_name
+                       COALESCE(u.name,s.submitter_label,'Anonymous') submitter_name, u.email submitter_email, reviewer.name reviewer_name
                 FROM nexus_form.submissions s
                 JOIN nexus_form.forms f ON f.id=s.form_id
-                JOIN nexus_auth.users u ON u.id=s.submitted_by
+                LEFT JOIN nexus_auth.users u ON u.id=s.submitted_by
                 LEFT JOIN nexus_auth.users reviewer ON reviewer.id=s.reviewed_by
                 WHERE s.organization_id=? AND (? OR s.submitted_by=?) AND (?::uuid IS NULL OR s.form_id=?::uuid)
                 ORDER BY s.submitted_at DESC
@@ -186,7 +186,7 @@ public class FormController {
     }
 
     private Map<String, Object> submission(UUID id, UUID uid, boolean manager) {
-        return db.queryForObject("SELECT s.*,s.responses::text responses_json,f.title form_title,f.category,f.approval_required,u.name submitter_name,u.email submitter_email,reviewer.name reviewer_name FROM nexus_form.submissions s JOIN nexus_form.forms f ON f.id=s.form_id JOIN nexus_auth.users u ON u.id=s.submitted_by LEFT JOIN nexus_auth.users reviewer ON reviewer.id=s.reviewed_by WHERE s.id=? AND (? OR s.submitted_by=?)", (rs, row) -> submission(rs, manager), id, manager, uid);
+        return db.queryForObject("SELECT s.*,s.responses::text responses_json,f.title form_title,f.category,f.approval_required,COALESCE(u.name,s.submitter_label,'Anonymous') submitter_name,u.email submitter_email,reviewer.name reviewer_name FROM nexus_form.submissions s JOIN nexus_form.forms f ON f.id=s.form_id LEFT JOIN nexus_auth.users u ON u.id=s.submitted_by LEFT JOIN nexus_auth.users reviewer ON reviewer.id=s.reviewed_by WHERE s.id=? AND (? OR s.submitted_by=?)", (rs, row) -> submission(rs, manager), id, manager, uid);
     }
 
     private Map<String, Object> form(ResultSet rs, boolean manager) throws SQLException {
@@ -199,6 +199,8 @@ public class FormController {
         item.put("category", rs.getString("category"));
         item.put("status", rs.getString("status"));
         item.put("approval_required", rs.getBoolean("approval_required"));
+        item.put("anonymous_enabled", rs.getBoolean("anonymous_enabled"));
+        item.put("public_slug", rs.getString("public_slug"));
         item.put("fields", readList(rs.getString("fields_json")));
         item.put("created_by", rs.getObject("created_by", UUID.class));
         item.put("creator_name", rs.getString("creator_name"));
@@ -242,7 +244,7 @@ public class FormController {
             if (!ids.add(id)) throw new IllegalArgumentException("Form field identifiers must be unique.");
             List<String> options = field.options() == null ? List.of() : field.options().stream().filter(Objects::nonNull).map(String::trim).filter(value -> !value.isBlank()).distinct().limit(30).toList();
             if (Set.of("SELECT", "RADIO").contains(type) && options.isEmpty()) throw new IllegalArgumentException(field.label() + " needs at least one option.");
-            fields.add(new FieldDefinition(id, field.label().trim(), type, Boolean.TRUE.equals(field.required()), options, text(field.placeholder())));
+            fields.add(new FieldDefinition(id, field.label().trim(), type, Boolean.TRUE.equals(field.required()), options, text(field.placeholder()),text(field.conditionField()),text(field.conditionEquals()),text(field.formula())));
         }
         return fields;
     }
@@ -252,11 +254,13 @@ public class FormController {
         for (Map<String, Object> field : fields) {
             String id = String.valueOf(field.get("id"));
             allowed.add(id);
+            String condition=Objects.toString(field.get("conditionField"),""); if(!condition.isBlank()&&!Objects.equals(Objects.toString(responses.get(condition),""),Objects.toString(field.get("conditionEquals"),"")))continue;
             Object value = responses.get(id);
             if (Boolean.TRUE.equals(field.get("required")) && (value == null || String.valueOf(value).isBlank())) throw new IllegalArgumentException(field.get("label") + " is required.");
         }
         if (!allowed.containsAll(responses.keySet())) throw new IllegalArgumentException("The response contains fields that do not belong to this form.");
     }
+    private void applyCalculations(List<Map<String,Object>> fields,Map<String,Object> responses){for(Map<String,Object> field:fields){if(!"CALCULATED".equals(field.get("type")))continue;String formula=Objects.toString(field.get("formula"),"").replaceAll("[^A-Za-z0-9_+\\-*/(). ]","");double total=0;boolean first=true;for(String part:formula.split("\\+")){double value;try{value=Double.parseDouble(part.trim());}catch(Exception ignored){Object raw=responses.get(part.trim());try{value=Double.parseDouble(Objects.toString(raw,"0"));}catch(Exception e){value=0;}}total=first?value:total+value;first=false;}responses.put(String.valueOf(field.get("id")),total);}}
 
     private List<Map<String, Object>> fields(Map<String, Object> form) { return readList(String.valueOf(form.get("fields_json"))); }
     private List<Map<String, Object>> readList(String value) { try { return json.readValue(value, new TypeReference<>() {}); } catch (JsonProcessingException e) { throw new IllegalStateException("Stored form fields are invalid.", e); } }

@@ -4,10 +4,10 @@ import { FormEvent, useState } from 'react'
 import { api } from '../lib/api'
 import { Sparkles } from './icons'
 
-type Props = { title?: string; context?: string; compact?: boolean }
+type Props = { title?: string; context?: string; orgId?: string; compact?: boolean }
 type Answer = { configured: boolean; answer: string }
 
-export default function AiAssistant({ title = 'NexusAI', context = '', compact = false }: Props) {
+export default function AiAssistant({ title = 'NexusAI', context = '', orgId, compact = false }: Props) {
   const [message, setMessage] = useState('')
   const [answer, setAnswer] = useState('')
   const [busy, setBusy] = useState(false)
@@ -18,7 +18,7 @@ export default function AiAssistant({ title = 'NexusAI', context = '', compact =
     if (!message.trim() || busy) return
     setBusy(true); setError('')
     try {
-      const result = await api<Answer>('/ai/chat', { method: 'POST', body: JSON.stringify({ message: message.trim(), context }) })
+      const result = await api<Answer>('/ai/chat', { method: 'POST', body: JSON.stringify({ message: message.trim(), context, orgId }) })
       setAnswer(result.answer); setMessage('')
     } catch (err) { setError(err instanceof Error ? err.message : 'The assistant could not respond.') }
     finally { setBusy(false) }

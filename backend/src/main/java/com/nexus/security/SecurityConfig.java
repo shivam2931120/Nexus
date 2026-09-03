@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/ws", "/ws/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/public/forms/**", "/api/public/shared-files/**", "/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/ws", "/ws/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response, 401, "AUTHENTICATION_REQUIRED", "Sign in to continue."))
