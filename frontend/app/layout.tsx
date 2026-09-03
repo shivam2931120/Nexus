@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('nexus_theme_version')!=='2'){localStorage.setItem('nexus_theme','dark');localStorage.setItem('nexus_theme_version','2')}document.documentElement.dataset.theme=localStorage.getItem('nexus_theme')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}" }} /></head><body><ClerkProvider><ClerkTokenBridge />{children}</ClerkProvider></body></html>
+  return <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('nexus_theme_version')!=='2'){localStorage.setItem('nexus_theme','dark');localStorage.setItem('nexus_theme_version','2')}document.documentElement.dataset.theme=localStorage.getItem('nexus_theme')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}" }} /></head><body><ClerkProvider><ClerkTokenBridge />{children}</ClerkProvider></body></html>
 }

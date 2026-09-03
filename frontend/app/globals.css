@@ -70,11 +70,12 @@ svg { flex: 0 0 auto; }
 
 .shell { min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); grid-template-rows: var(--topbar-height) minmax(0, 1fr); transition: grid-template-columns .2s ease; }
 .shell.sidebar-collapsed { --sidebar-width: 88px; }
-.topbar { position: sticky; top: 0; z-index: 20; grid-column: 1 / -1; display: grid; grid-template-columns: var(--sidebar-width) minmax(220px, 640px) 1fr; align-items: center; min-width: 0; height: var(--topbar-height); padding: 0 clamp(16px, 2vw, 30px); gap: clamp(16px, 2vw, 30px); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px); }
+.topbar { position: sticky; top: 0; z-index: 20; grid-column: 1 / -1; display: grid; grid-template-columns: var(--sidebar-width) minmax(220px, 640px) minmax(0, 1fr); align-items: center; min-width: 0; height: var(--topbar-height); padding: 0 clamp(16px, 2vw, 30px); gap: clamp(16px, 2vw, 30px); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px); }
+.topbar > * { min-width: 0; }
 .topbar-brand-area { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .brand { min-width: 0; display: inline-flex; align-items: center; gap: 11px; color: var(--text); font-weight: 600; text-decoration: none; }
 .brand-mark { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--border); background: var(--surface) url('/logo.jpg') center / cover no-repeat; color: transparent; font-size: 0; }
-.top-actions { justify-self: end; display: flex; align-items: center; gap: 6px; }
+.top-actions { min-width: max-content; justify-self: end; display: flex; align-items: center; gap: 6px; }
 .top-actions .nav-count { position: absolute; top: 2px; right: 1px; min-width: 15px; height: 15px; display: grid; place-items: center; padding: 0 3px; background: var(--brand); color: #fff; font-size: 8px; }
 .mobile-search, .mobile-bottom-nav { display: none; }
 .navigation-toggle { width: 32px; height: 38px; flex-basis: 32px; }
@@ -400,14 +401,14 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 @media (max-width: 767px) {
   :root { --topbar-height: 60px; }
   .shell, .shell.sidebar-collapsed { --sidebar-width: 248px; display: block; }
-  .topbar { grid-template-columns: minmax(0, 1fr) auto auto; height: var(--topbar-height); padding: 0 12px; gap: 5px; }
-  .topbar-brand-area { gap: 7px; }
+  .topbar { display: flex; height: var(--topbar-height); padding: 0 10px; gap: 4px; }
+  .topbar-brand-area { flex: 1 1 auto; gap: 7px; }
   .navigation-toggle { width: 38px; flex-basis: 38px; }
   .brand { gap: 8px; }
   .brand > span { display: inline; }
   .topbar > .search { display: none; }
-  .mobile-search { display: inline-grid; }
-  .top-actions { gap: 1px; }
+  .mobile-search { display: inline-grid; flex: 0 0 40px; width: 40px; height: 40px; }
+  .top-actions { flex: 0 0 auto; gap: 1px; }
   .top-actions .icon-button:first-child { display: none; }
   .sidebar { position: fixed; top: var(--topbar-height); left: 0; bottom: 0; z-index: 45; width: min(310px, 86vw); height: auto; display: block; padding-bottom: max(28px, env(safe-area-inset-bottom)); transform: translateX(-105%); visibility: hidden; transition: transform .2s ease, visibility 0s linear .2s; box-shadow: 18px 0 42px rgba(0, 0, 0, .18); }
   .shell.mobile-nav-open .sidebar { transform: translateX(0); }
@@ -494,7 +495,7 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   .button { min-height: 44px; }
   .icon-button { width: 44px; height: 44px; flex-basis: 44px; }
   .top-actions .icon-button { width: 40px; height: 40px; flex-basis: 40px; }
-  .top-actions .icon-button:nth-child(3) { display: none; }
+  .top-actions .icon-button:nth-child(3) { display: inline-grid; }
   .avatar { width: 38px; height: 38px; flex-basis: 38px; }
   .page-heading .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .page-heading .actions > .button { width: 100%; }
